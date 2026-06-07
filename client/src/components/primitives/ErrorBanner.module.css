@@ -1,0 +1,49 @@
+.banner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--danger);
+  background-color: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  letter-spacing: var(--tracking-snug);
+  animation: enter var(--duration-base) var(--ease-out);
+}
+
+.message {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+  line-height: var(--line-height-normal);
+}
+
+.dismiss {
+  flex: 0 0 auto;
+  color: var(--danger);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  opacity: 0.7;
+  transition: opacity var(--duration-base) var(--ease), background-color var(--duration-base) var(--ease);
+}
+
+.dismiss:hover {
+  opacity: 1;
+  background-color: color-mix(in srgb, var(--danger) 18%, transparent);
+}
+
+@keyframes enter {
+  from { opacity: 0; transform: translateY(-2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner { animation: none; }
+}
