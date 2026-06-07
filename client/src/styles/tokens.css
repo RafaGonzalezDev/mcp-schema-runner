@@ -70,6 +70,12 @@
   --outline-width: 2px;
   --outline-offset: var(--space-1);
 
+  /* ---- Disabled state opacity (used by Button primitive) ----
+     0.5 is the "barely visible" baseline; 0.7 is the minimum that
+     keeps the WCAG 1.4.11 non-text contrast threshold (3:1) for
+     all variants including --danger at 5.71:1 base contrast. */
+  --button-disabled-opacity: 0.7;
+
   /* ---- Layout ---- */
   --max-width: 68ch;
   --max-width-wide: 80rem;
