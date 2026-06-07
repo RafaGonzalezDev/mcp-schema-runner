@@ -14,11 +14,29 @@
   min-height: var(--topbar-height);
 }
 
-.brand {
+.brandLink {
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
   min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-base) var(--ease);
+}
+
+.brandLink:hover .brandName {
+  color: var(--accent);
+}
+
+.brandLink:focus-visible {
+  outline: var(--outline-width) solid var(--accent);
+  outline-offset: var(--outline-offset);
 }
 
 .brandMark {
@@ -36,6 +54,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  transition: color var(--duration-base) var(--ease);
 }
 
 .brandSep {
@@ -60,8 +79,19 @@
 
 .nav {
   display: inline-flex;
-  align-items: baseline;
-  gap: var(--space-5);
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.navItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sep {
+  color: var(--text-faint);
+  user-select: none;
 }
 
 .navLink {
@@ -76,6 +106,8 @@
   font-weight: var(--font-weight-medium);
   background: none;
   border: 0;
+  text-decoration: none;
+  cursor: pointer;
   transition: color var(--duration-base) var(--ease);
 }
 
