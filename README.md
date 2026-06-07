@@ -65,8 +65,6 @@ mcp-schema-runner/
 │   └── fixtures.ts                      # built-in MCP server configs
 ├── scripts/dev.mjs                      # Orchestrator (API server + Vite client)
 ├── fixtures-workspace/                  # Target directory for the `filesystem` fixture
-├── plan.md                              # 7-phase MVP plan and phase 2/3 roadmap
-├── handoff.md                           # Current state, verification steps, suggested skills
 └── client/public/                       # Static assets served by Vite and repo-level images
     └── preview.png                      # HomePage screenshot (used in README.md)
 ```
@@ -162,9 +160,9 @@ The MCP client is the only piece allowed to spawn processes, and it never auto-c
 
 ## Notes
 
-- Only the `stdio` transport is implemented in the MVP. The `SSE`/`HTTP` transports tracked in `plan.md` (Phase 3) are out of scope for the current release.
+- Only the `stdio` transport is implemented in the MVP. The `SSE`/`HTTP` transports are tracked as a follow-up (see the Phase 3 notes in the local implementation plan, gitignored).
 - The runner never auto-connects to any server on startup, including the built-in fixtures. Connections are always explicit.
-- `fixtures-workspace/` ships with a `hello.txt` and a `README.md` so the end-to-end smoke test in `handoff.md` works against a fresh clone with no extra setup.
+- `fixtures-workspace/` ships with a `hello.txt` and a `README.md` so the end-to-end smoke test works against a fresh clone with no extra setup.
 - The Inspector only spawns a subprocess after the user clicks **connect**. The UI never holds a connection silently.
 
 ## References
