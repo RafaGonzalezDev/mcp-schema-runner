@@ -23,7 +23,10 @@ export function App() {
   return (
     <AppShell online={online} currentRoute={route} onNavigate={navigate}>
       {route === 'home' ? (
-        <HomePage />
+        <HomePage
+          onNavigate={navigate}
+          onSelectServer={setSelectedServerId}
+        />
       ) : (
         <InspectorPage
           selectedServerId={selectedServerId}

@@ -135,6 +135,72 @@
   tab-size: 2;
 }
 
+/* ---- Add server form ---- */
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.formLabel {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  letter-spacing: var(--tracking-wide);
+  font-weight: var(--font-weight-medium);
+  text-transform: uppercase;
+}
+
+.formHint {
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+  line-height: var(--line-height-normal);
+}
+
+.formHint code {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 0.95em;
+}
+
+.addActions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.success {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-subtle);
+}
+
+.successDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--accent);
+  flex-shrink: 0;
+  box-shadow: 0 0 0 4px rgba(197, 224, 99, 0.15);
+}
+
+.successText {
+  color: var(--text);
+  font-size: var(--font-size-sm);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.successText strong {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text);
+}
+
 @media (max-width: 768px) {
   .title { font-size: var(--font-size-3xl); }
   .step { grid-template-columns: 2rem 1fr; }
