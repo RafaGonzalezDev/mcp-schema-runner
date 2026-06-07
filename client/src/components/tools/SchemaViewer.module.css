@@ -7,7 +7,7 @@
   border: var(--hairline);
   border-radius: var(--radius-md);
   padding: var(--space-4);
-  max-height: 28rem;
+  max-height: var(--inspector-pre-max-height);
   overflow: auto;
   white-space: pre;
   tab-size: 2;
