@@ -1,0 +1,149 @@
+/* ============================================================
+   DESIGN TOKENS — source of truth: personal-portfolio/src/index.css
+   Mirror of the dark editorial design system. Any divergence here
+   is a bug; sync from portfolio if tokens change upstream.
+   ============================================================ */
+
+:root {
+  /* ---- Type: families ---- */
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* ---- Type: sizes ---- */
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-base: 0.9375rem;
+  --font-size-lg: 1rem;
+  --font-size-xl: 1.125rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 2rem;
+  --font-size-4xl: 2.75rem;
+  --font-size-display: clamp(2.5rem, 5.5vw, 4.5rem);
+
+  /* ---- Type: weights ---- */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* ---- Type: line height ---- */
+  --line-height-tight: 1.05;
+  --line-height-snug: 1.2;
+  --line-height-normal: 1.6;
+  --line-height-relaxed: 1.75;
+
+  /* ---- Type: tracking ---- */
+  --tracking-tighter: -0.04em;
+  --tracking-tight: -0.02em;
+  --tracking-snug: -0.005em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.02em;
+  --tracking-widest: 0.12em;
+
+  /* ---- Spacing (4pt base) ---- */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 6rem;
+  --space-10: 8rem;
+  --space-11: 12rem;
+
+  /* ---- Radius ---- */
+  --radius-sm: var(--space-1);
+  --radius-md: var(--space-2);
+  --radius-lg: var(--space-3);
+  --radius-pill: 9999px;
+
+  /* ---- Borders ---- */
+  --border-width: 1px;
+  --border-thick-width: 2px;
+  --border-thin: var(--border-width) solid var(--border);
+  --border-thick: var(--border-thick-width) solid var(--border-strong);
+  --hairline: 1px solid var(--border);
+
+  /* ---- Outline (focus) ---- */
+  --outline-width: 2px;
+  --outline-offset: var(--space-1);
+
+  /* ---- Layout ---- */
+  --max-width: 68ch;
+  --max-width-wide: 80rem;
+  --max-width-narrow: 52ch;
+  --inline-padding: var(--space-6);
+  --section-gap: var(--space-10);
+  --grid-columns: 12;
+  --grid-gutter: var(--space-5);
+  --grid-track: 1fr;
+  --sidebar-width: 14rem;
+  --size-meta-column: 12rem;
+
+  /* ---- Sizes (semantic) ---- */
+  --size-control-sm: 1.75rem;
+  --size-indicator: 0.5rem;
+  --size-rule: 1px;
+  --size-status-dot: 0.4375rem;
+  --size-grid-index: var(--space-7);
+
+  /* ---- Backdrop ---- */
+  --blur-surface: 10px;
+  --backdrop-nav: saturate(180%) blur(var(--blur-surface));
+
+  /* ---- Motion ---- */
+  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 320ms;
+  --duration-slower: 600ms;
+  --hover-lift: 2px;
+  --pulse-period: 2.4s;
+
+  /* ---- Z-index ---- */
+  --z-nav: 100;
+  --z-overlay: 200;
+
+  /* ---- Surface textures ---- */
+  --grid-line-color: rgba(255, 255, 255, 0.04);
+  --dot-color: rgba(255, 255, 255, 0.06);
+}
+
+/* ============================================================
+   THEME — DARK EDITORIAL
+   ============================================================ */
+:root {
+  --bg: #0c0c0d;
+  --bg-elevated: #131314;
+  --bg-subtle: #181819;
+  --text: #f2efe8;
+  --text-muted: #9b978c;
+  --text-faint: #57564f;
+  --border: #232220;
+  --border-strong: #34322d;
+  --accent: #c5e063;
+  --accent-soft: rgba(197, 224, 99, 0.14);
+  --accent-fg: #0c0c0d;
+  --highlight: #f2efe8;
+  --pulse: rgba(197, 224, 99, 0.65);
+  --danger: #e06363;
+  --danger-soft: rgba(224, 99, 99, 0.12);
+}
+
+/* ============================================================
+   RESPONSIVE TOKENS
+   ============================================================ */
+@media (max-width: 768px) {
+  :root {
+    --font-size-3xl: 1.625rem;
+    --font-size-4xl: 2.125rem;
+    --font-size-display: clamp(2.25rem, 10vw, 3.5rem);
+    --inline-padding: var(--space-4);
+    --section-gap: var(--space-8);
+    --grid-gutter: var(--space-4);
+    --size-meta-column: 100%;
+  }
+}
