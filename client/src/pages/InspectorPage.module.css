@@ -1,0 +1,144 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 18rem;
+  gap: var(--space-6);
+  align-items: start;
+  min-width: 0;
+}
+
+/* ---- Main content column ---- */
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding-top: var(--space-3);
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+/* ---- Tools panel (sticky, altura máxima del viewport) ----
+   Va a la derecha. */
+.toolsPanel {
+  position: sticky;
+  top: calc(var(--space-4) * 2 + var(--font-size-xl) * 1.2);
+  max-height: calc(100vh - var(--space-4) * 2 - var(--font-size-xl) * 1.2);
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-elevated);
+  border: var(--hairline);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  min-height: 0;
+}
+
+.toolsHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--hairline);
+}
+
+.toolsTitle {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+}
+
+.toolsCount {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  background-color: var(--bg-subtle);
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+  border: var(--hairline);
+}
+
+.toolsBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.toolsEmpty {
+  padding: var(--space-5) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  text-align: center;
+  line-height: var(--line-height-normal);
+}
+
+/* ---- Server config block ---- */
+.configBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  background-color: var(--bg);
+  border: var(--hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  word-break: break-all;
+}
+
+.configRow {
+  display: flex;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+
+.configKey {
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  color: var(--text-faint);
+  flex: 0 0 5rem;
+}
+
+.configVal {
+  color: var(--text);
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+  .toolsPanel {
+    position: static;
+    max-height: 22rem;
+    /* En modo apilado reordenamos: tools aparecen debajo de main */
+    order: 2;
+  }
+  .main { order: 1; }
+}
