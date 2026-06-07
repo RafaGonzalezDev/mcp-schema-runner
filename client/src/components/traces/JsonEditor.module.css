@@ -7,9 +7,10 @@
   border: var(--hairline);
   border-radius: var(--radius-md);
   padding: var(--space-3);
-  min-height: 12rem;
   width: 100%;
-  resize: vertical;
+  height: 18rem;
+  resize: none;
+  overflow-y: auto;
   transition: border-color var(--duration-base) var(--ease);
   tab-size: 2;
 }
