@@ -2,7 +2,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-2);
-  padding: 0.4rem 0.7rem;
+  padding: 0.5rem 0.9rem;
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
@@ -61,6 +61,6 @@
 }
 
 .compact {
-  padding-block: 0.3rem;
-  padding-inline: 0.55rem;
+  padding-block: 0.4rem;
+  padding-inline: 0.7rem;
 }
