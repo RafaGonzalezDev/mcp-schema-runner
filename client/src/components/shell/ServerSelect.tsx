@@ -128,17 +128,17 @@ export function ServerSelect({ servers, selectedId, onSelect }: Props) {
                     triggerRef.current?.focus();
                   }}
                 >
-                  <StatusDot status={s.status} />
-                  <span className={styles.optionBody}>
+                  <span className={styles.optionLine1}>
+                    <StatusDot status={s.status} />
                     <span className={styles.optionName}>{s.config.name}</span>
-                    <span className={styles.optionMeta}>
-                      <span className={metaClass}>{statusLabel[s.status]}</span>
-                      <span className={styles.sep} aria-hidden="true">·</span>
-                      <span>{s.config.transport}</span>
-                      <span className={styles.sep} aria-hidden="true">·</span>
-                      <span>
-                        {s.tools.length} {s.tools.length === 1 ? 'tool' : 'tools'}
-                      </span>
+                    <span className={styles.sep} aria-hidden="true">·</span>
+                    <span className={metaClass}>{statusLabel[s.status]}</span>
+                  </span>
+                  <span className={styles.optionLine2}>
+                    <span>{s.config.transport}</span>
+                    <span className={styles.sep} aria-hidden="true">·</span>
+                    <span>
+                      {s.tools.length} {s.tools.length === 1 ? 'tool' : 'tools'}
                     </span>
                   </span>
                 </button>

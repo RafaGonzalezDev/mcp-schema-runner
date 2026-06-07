@@ -84,8 +84,8 @@
 
 .option {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: var(--space-1);
   width: 100%;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
@@ -96,7 +96,6 @@
   transition:
     background-color var(--duration-base) var(--ease),
     color var(--duration-base) var(--ease);
-  white-space: nowrap;
 }
 
 .option:hover,
@@ -111,16 +110,30 @@
   background-color: var(--accent-soft);
 }
 
-.optionBody {
-  flex: 1 1 auto;
-  min-width: 0;
+.optionLine1 {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-  overflow: hidden;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.optionLine2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  min-width: 0;
+  white-space: nowrap;
+  padding-left: calc(var(--size-status-dot) + var(--space-2));
 }
 
 .optionName {
+  flex: 1 1 auto;
   font-weight: var(--font-weight-medium);
   letter-spacing: var(--tracking-snug);
   white-space: nowrap;
@@ -129,27 +142,10 @@
   min-width: 0;
 }
 
-.optionMeta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  row-gap: 2px;
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
+.sep {
   color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-  min-width: 0;
+  user-select: none;
 }
 
-.optionMeta > span {
-  white-space: nowrap;
-}
-
-.optionMeta > span.sep {
-  display: contents;
-}
-
-.optionMeta .accent { color: var(--accent); }
-.optionMeta .danger { color: var(--danger); }
+.accent { color: var(--accent); }
+.danger { color: var(--danger); }
