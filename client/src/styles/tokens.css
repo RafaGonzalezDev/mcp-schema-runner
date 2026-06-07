@@ -89,6 +89,8 @@
   --size-status-dot: 0.4375rem;
   --size-grid-index: var(--space-7);
   --inspector-pre-max-height: 28rem;
+  --topbar-height: 4rem;
+  --header-height: 4rem;
 
   /* ---- Backdrop ---- */
   --blur-surface: 10px;
