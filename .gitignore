@@ -8,6 +8,8 @@ node_modules/
 dist/
 .vite/
 coverage/
+*.tsbuildinfo
+.cache/
 
 # Logs
 *.log
