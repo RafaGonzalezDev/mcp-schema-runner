@@ -173,7 +173,7 @@ export function InspectorPage({ selectedServerId, onSelectServer }: Props) {
                 onClick={handleRun}
                 disabled={!isConnected || !tool || !argsValid || callToolMutation.isPending}
               >
-                {callToolMutation.isPending ? 'running...' : 'run tool'}
+                {callToolMutation.isPending ? 'calling...' : 'call tool'}
               </Button>
             }
           >
