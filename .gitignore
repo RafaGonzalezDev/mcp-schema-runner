@@ -1,6 +1,8 @@
-# Local implementation plan / agent handoff
-plan.md
-handoff.md
+# Local docs (plan, handoff) — session artifacts, not for the repo
+docs/
+
+# Server runtime data (persisted user-added servers)
+server/.data/
 
 # Dependencies
 node_modules/
