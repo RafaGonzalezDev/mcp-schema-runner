@@ -6,6 +6,7 @@
   font-family: var(--font-mono);
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
+  line-height: 1;
   letter-spacing: var(--tracking-snug);
   border-radius: var(--radius-md);
   border: 0;
