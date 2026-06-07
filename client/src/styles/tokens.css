@@ -88,6 +88,7 @@
   --size-rule: 1px;
   --size-status-dot: 0.4375rem;
   --size-grid-index: var(--space-7);
+  --inspector-pre-max-height: 28rem;
 
   /* ---- Backdrop ---- */
   --blur-surface: 10px;
@@ -145,5 +146,6 @@
     --section-gap: var(--space-8);
     --grid-gutter: var(--space-4);
     --size-meta-column: 100%;
+    --inspector-pre-max-height: 20rem;
   }
 }
