@@ -6,11 +6,15 @@
   min-width: 0;
 }
 
-/* ---- Main content column ---- */
-.main {
+/* ---- Page wrapper ----
+   El PageHeader va fuera del layout, encima de la columna main.
+   El flex gap controla la distancia entre header y main; esa
+   misma distancia se replica en el top del toolsPanel para que
+   ambos queden alineados. */
+.page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
   min-width: 0;
 }
 
@@ -20,7 +24,28 @@
   justify-content: space-between;
   gap: var(--space-4);
   flex-wrap: wrap;
-  padding-top: var(--space-3);
+  min-height: var(--header-height);
+}
+
+/* ---- Main row: toolsPanel (izquierda) + panelsColumn (derecha) ----
+   El toolsPanel ya no es fixed: vive en el flujo, alineado al
+   inicio del cross-axis para que no se estire cuando la columna
+   de paneles sea más alta. Los paneles crecen verticalmente
+   dentro de su propia columna. */
+.main {
+  display: flex;
+  flex-direction: row;
+  gap: var(--space-6);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.panelsColumn {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-width: 0;
 }
 
 .headerLeft {
@@ -38,12 +63,18 @@
   flex: 0 0 auto;
 }
 
-/* ---- Tools panel (sticky, altura máxima del viewport) ----
-   Va a la derecha. */
+/* ---- Tools panel (en el flujo, a la izquierda del main) ----
+   El panel vive dentro del flex row `.main` y se coloca a la
+   izquierda del `.panelsColumn`. Su altura máxima limita el
+   listado interno de tools: cuando hay más herramientas de las
+   que caben, el `toolsBody` (overflow-y: auto) hace scroll
+   themed y el panel no crece más allá del viewport. El panel
+   en sí se desplaza con la página como cualquier contenedor
+   del flujo principal. */
 .toolsPanel {
-  position: sticky;
-  top: calc(var(--space-4) * 2 + var(--font-size-xl) * 1.2);
-  max-height: calc(100vh - var(--space-4) * 2 - var(--font-size-xl) * 1.2);
+  flex: 0 0 18rem;
+  width: 18rem;
+  max-height: calc(100vh - var(--topbar-height) - var(--header-height) - var(--space-7) * 2);
   display: flex;
   flex-direction: column;
   background-color: var(--bg-elevated);
@@ -133,12 +164,14 @@
 }
 
 @media (max-width: 900px) {
-  .layout { grid-template-columns: 1fr; }
+  .page { gap: var(--space-5); }
+  .main { flex-direction: column; }
   .toolsPanel {
-    position: static;
+    flex: 0 0 auto;
+    width: auto;
     max-height: 22rem;
-    /* En modo apilado reordenamos: tools aparecen debajo de main */
+    /* En modo apilado reordenamos: tools aparecen debajo de los paneles */
     order: 2;
   }
-  .main { order: 1; }
+  .panelsColumn { order: 1; }
 }

@@ -112,90 +112,92 @@ export function InspectorPage({ selectedServerId, onSelectServer }: Props) {
   const isConnected = server.status === 'connected';
 
   return (
-    <div className={styles.layout}>
-      <div className={styles.main}>
-        <PageHeader
-          server={server}
-          servers={servers}
-          isConnected={isConnected}
-          connecting={connecting}
-          onSelectServer={onSelectServer}
-          onConnect={handleConnect}
-          onDisconnect={handleDisconnect}
-        />
-
-        <ErrorBanner
-          error={connect.error?.message ?? null}
-          onDismiss={connect.reset}
-          resetKey={`connect:${server.config.id}:${connect.error?.message ?? ''}`}
-        />
-
-        <Panel
-          title="Server config"
-          subtitle={`${server.config.transport} · ${server.status}`}
-          actions={
-            <span className="numeric" style={{ fontSize: 'var(--font-size-xs)' }}>
-              {isConnected ? `${server.tools.length} tools loaded` : 'no live tools'}
-            </span>
-          }
-        >
-          <ServerConfig server={server} />
-        </Panel>
-
-        <Panel
-          title="Input schema"
-          subtitle={
-            tool
-              ? `tool: ${tool.name}`
-              : isConnected
-                ? 'pick a tool from the right'
-                : 'connect to load tools'
-          }
-        >
-          <SchemaViewer tool={tool} />
-        </Panel>
-
-        <Panel
-          title="Arguments"
-          subtitle={tool ? 'edit JSON manually before running' : 'no tool selected'}
-          actions={
-            <Button
-              variant="primary"
-              compact
-              onClick={handleRun}
-              disabled={!isConnected || !tool || !argsValid || callToolMutation.isPending}
-            >
-              {callToolMutation.isPending ? 'running...' : 'run tool'}
-            </Button>
-          }
-        >
-          <JsonEditor
-            schema={tool?.inputSchema}
-            initial={argsText}
-            onChange={setArgsText}
-            disabled={!tool}
-          />
-        </Panel>
-
-        <Panel
-          title="Execution trace"
-          subtitle={tool ? `${server.config.id} / ${tool.name}` : 'run a tool to populate'}
-        >
-          <ErrorBanner
-            error={callToolMutation.error?.message ?? null}
-            onDismiss={callToolMutation.reset}
-            resetKey={`call:${server.config.id}:${tool?.name ?? ''}:${callToolMutation.error?.message ?? ''}`}
-          />
-          <ExecutionTrace trace={lastTrace} loading={callToolMutation.isPending} />
-        </Panel>
-      </div>
-
-      <ToolsPanel
-        tools={server.tools}
+    <div className={styles.page}>
+      <PageHeader
+        server={server}
+        servers={servers}
         isConnected={isConnected}
-        selectedTool={selectedTool}
-        onSelectTool={setSelectedTool}
+        connecting={connecting}
+        onSelectServer={onSelectServer}
+        onConnect={handleConnect}
+        onDisconnect={handleDisconnect}
       />
+
+      <div className={styles.main}>
+        <ToolsPanel
+          tools={server.tools}
+          isConnected={isConnected}
+          selectedTool={selectedTool}
+          onSelectTool={setSelectedTool}
+        />
+
+        <div className={styles.panelsColumn}>
+          <ErrorBanner
+            error={connect.error?.message ?? null}
+            onDismiss={connect.reset}
+            resetKey={`connect:${server.config.id}:${connect.error?.message ?? ''}`}
+          />
+
+          <Panel
+            title="Server config"
+            subtitle={`${server.config.transport} · ${server.status}`}
+            actions={
+              <span className="numeric" style={{ fontSize: 'var(--font-size-xs)' }}>
+                {isConnected ? `${server.tools.length} tools loaded` : 'no live tools'}
+              </span>
+            }
+          >
+            <ServerConfig server={server} />
+          </Panel>
+
+          <Panel
+            title="Input schema"
+            subtitle={
+              tool
+                ? `tool: ${tool.name}`
+                : isConnected
+                  ? 'pick a tool from the right'
+                  : 'connect to load tools'
+            }
+          >
+            <SchemaViewer tool={tool} />
+          </Panel>
+
+          <Panel
+            title="Arguments"
+            subtitle={tool ? 'edit JSON manually before running' : 'no tool selected'}
+            actions={
+              <Button
+                variant="primary"
+                compact
+                onClick={handleRun}
+                disabled={!isConnected || !tool || !argsValid || callToolMutation.isPending}
+              >
+                {callToolMutation.isPending ? 'running...' : 'run tool'}
+              </Button>
+            }
+          >
+            <JsonEditor
+              schema={tool?.inputSchema}
+              initial={argsText}
+              onChange={setArgsText}
+              disabled={!tool}
+            />
+          </Panel>
+
+          <Panel
+            title="Execution trace"
+            subtitle={tool ? `${server.config.id} / ${tool.name}` : 'run a tool to populate'}
+          >
+            <ErrorBanner
+              error={callToolMutation.error?.message ?? null}
+              onDismiss={callToolMutation.reset}
+              resetKey={`call:${server.config.id}:${tool?.name ?? ''}:${callToolMutation.error?.message ?? ''}`}
+            />
+            <ExecutionTrace trace={lastTrace} loading={callToolMutation.isPending} />
+          </Panel>
+        </div>
+      </div>
     </div>
   );
 }
