@@ -167,13 +167,6 @@ The MCP client is the only piece allowed to spawn processes, and it never auto-c
 - `fixtures-workspace/` ships with a `hello.txt` and a `README.md` so the end-to-end smoke test in `handoff.md` works against a fresh clone with no extra setup.
 - The Inspector only spawns a subprocess after the user clicks **connect**. The UI never holds a connection silently.
 
-## Documentation
-
-Useful references:
-
-- [`plan.md`](plan.md) — 7-phase MVP plan and the Phase 2/3 roadmap.
-- [`handoff.md`](handoff.md) — current state, verification steps, suggested skills for a fresh agent.
-
 ## References
 
 External links that informed this project:
