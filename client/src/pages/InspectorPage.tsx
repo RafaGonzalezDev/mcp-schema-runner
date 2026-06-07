@@ -169,7 +169,6 @@ export function InspectorPage({ selectedServerId, onSelectServer }: Props) {
             actions={
               <Button
                 variant="primary"
-                compact
                 onClick={handleRun}
                 disabled={!isConnected || !tool || !argsValid || callToolMutation.isPending}
               >
