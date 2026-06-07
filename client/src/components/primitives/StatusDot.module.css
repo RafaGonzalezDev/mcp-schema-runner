@@ -1,0 +1,45 @@
+.dot {
+  display: inline-block;
+  width: var(--size-status-dot);
+  height: var(--size-status-dot);
+  border-radius: var(--radius-pill);
+  position: relative;
+  flex-shrink: 0;
+}
+
+.dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--radius-pill);
+  opacity: 0;
+}
+
+.dot.connected {
+  background-color: var(--accent);
+}
+.dot.connected::after {
+  background-color: var(--pulse);
+  animation: pulse var(--pulse-period) var(--ease-out) infinite;
+}
+
+.dot.connecting {
+  background-color: var(--text-muted);
+}
+
+.dot.disconnected {
+  background-color: var(--text-faint);
+}
+
+.dot.error {
+  background-color: var(--danger);
+}
+.dot.error::after {
+  background-color: var(--danger);
+  animation: pulse var(--pulse-period) var(--ease-out) infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(0.6); opacity: 0.6; }
+  100% { transform: scale(1.6); opacity: 0; }
+}

@@ -1,0 +1,60 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-widest);
+}
+
+.hint {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  letter-spacing: var(--tracking-snug);
+}
+
+.error {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  color: var(--danger);
+  letter-spacing: var(--tracking-snug);
+}
+
+.input,
+.textarea {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-base);
+  color: var(--text);
+  background-color: var(--bg);
+  border: var(--hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  transition: border-color var(--duration-base) var(--ease);
+  width: 100%;
+}
+
+.textarea {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  resize: vertical;
+  min-height: 9rem;
+}
+
+.input:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.inputMono {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
