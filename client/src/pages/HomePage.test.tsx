@@ -5,12 +5,13 @@
  * `useMutation` (eso es territorio de la librería). Aquí verificamos
  * exclusivamente la composición de la UI:
  *
- *   - el template pre-rellena el editor
- *   - el botón se deshabilita ante JSON inválido o id duplicado
+ *   - el template pre-rellena los campos del formulario
+ *   - el botón se deshabilita ante campos vacíos o id duplicado
  *   - un submit válido llama a la API y, tras éxito, navega al
  *     inspector con el id recién añadido
  *   - un submit que la API rechaza (400 / red) muestra el mensaje
  *     en el ErrorBanner
+ *   - el id se autoderiva del name hasta que el usuario lo edita
  *
  * Estrategia: mockear `lib/api` (la capa HTTP) y envolver con un
  * `QueryClient` real con la caché pre-poblada. Así `useServers` y
@@ -84,6 +85,28 @@ function setupServers(servers: McpServerState[] = []) {
   mockListServers.mockResolvedValue({ servers });
 }
 
+function getNameInput() {
+  return screen.getByLabelText('name') as HTMLInputElement;
+}
+function getIdInput() {
+  return screen.getByLabelText('id') as HTMLInputElement;
+}
+function getCommandInput() {
+  return screen.getByLabelText('command') as HTMLInputElement;
+}
+function getArgsInput() {
+  return screen.getByLabelText('arguments') as HTMLTextAreaElement;
+}
+function getCwdInput() {
+  return screen.getByLabelText('working directory') as HTMLInputElement;
+}
+function getEnvInput() {
+  return screen.getByLabelText('environment variables') as HTMLTextAreaElement;
+}
+function getSubmitButton() {
+  return screen.getByRole('button', { name: /add server/i });
+}
+
 describe('HomePage', () => {
   let onNavigate: ReturnType<typeof vi.fn>;
   let onSelectServer: ReturnType<typeof vi.fn>;
@@ -110,22 +133,46 @@ describe('HomePage', () => {
     expect(screen.getByText('Connect from the app')).toBeTruthy();
   });
 
-  it('pre-populates the editor with a starter template', () => {
+  it('pre-populates the form with a filesystem starter template', () => {
     render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
       wrapper: makeWrapper(),
     });
-    const textarea = screen.getByLabelText('JSON config') as HTMLTextAreaElement;
-    expect(textarea.value).toContain('filesystem');
-    expect(textarea.value).toContain('"transport": "stdio"');
+    expect(getNameInput().value).toBe('filesystem');
+    expect(getIdInput().value).toBe('filesystem');
+    expect(getCommandInput().value).toBe('npx');
+    expect(getArgsInput().value).toContain('@modelcontextprotocol/server-filesystem');
   });
 
-  it('disables submit when the JSON is malformed', () => {
+  it('hides cwd and env behind a collapsed advanced section by default', () => {
     render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
       wrapper: makeWrapper(),
     });
-    const textarea = screen.getByLabelText('JSON config');
-    fireEvent.change(textarea, { target: { value: '{ not valid' } });
-    const button = screen.getByRole('button', { name: /add server/i });
+    expect(screen.queryByLabelText('working directory')).toBeNull();
+    expect(screen.queryByLabelText('environment variables')).toBeNull();
+    const toggle = screen.getByRole('button', { name: /advanced/i });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(getCwdInput()).toBeTruthy();
+    expect(getEnvInput()).toBeTruthy();
+  });
+
+  it('disables submit when a required field is empty', () => {
+    render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
+      wrapper: makeWrapper(),
+    });
+    fireEvent.change(getCommandInput(), { target: { value: '' } });
+    const button = getSubmitButton();
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(mockAddServerApi).not.toHaveBeenCalled();
+  });
+
+  it('disables submit when arguments is empty', () => {
+    render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
+      wrapper: makeWrapper(),
+    });
+    fireEvent.change(getArgsInput(), { target: { value: '' } });
+    const button = getSubmitButton();
     expect(button.hasAttribute('disabled')).toBe(true);
     expect(mockAddServerApi).not.toHaveBeenCalled();
   });
@@ -136,10 +183,25 @@ describe('HomePage', () => {
     });
     // El template tiene id "filesystem" que ya existe en la lista,
     // así que el botón debe estar deshabilitado desde el primer
-    // render (sin necesidad de editar el JSON).
-    const button = screen.getByRole('button', { name: /add server/i });
+    // render (sin necesidad de editar nada).
+    const button = getSubmitButton();
     expect(button.hasAttribute('disabled')).toBe(true);
     expect(mockAddServerApi).not.toHaveBeenCalled();
+  });
+
+  it('auto-derives the id from the name until the user edits the id', () => {
+    render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
+      wrapper: makeWrapper(),
+    });
+    // Cambia el name: el id debe seguirle.
+    fireEvent.change(getNameInput(), { target: { value: 'GitHub API' } });
+    expect(getIdInput().value).toBe('github-api');
+
+    // El usuario edita el id manualmente: a partir de ahí, el name
+    // deja de tocar el id.
+    fireEvent.change(getIdInput(), { target: { value: 'gh' } });
+    fireEvent.change(getNameInput(), { target: { value: 'Other Name' } });
+    expect(getIdInput().value).toBe('gh');
   });
 
   it('submits a valid config and navigates to the inspector on success', async () => {
@@ -149,26 +211,30 @@ describe('HomePage', () => {
     render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
       wrapper: makeWrapper([makeServer('context7')]),
     });
-    const textarea = screen.getByLabelText('JSON config');
-    fireEvent.change(textarea, {
-      target: {
-        value: JSON.stringify({
-          id: 'github',
-          name: 'github',
-          transport: 'stdio',
-          command: 'npx',
-          args: ['-y', '@modelcontextprotocol/server-github'],
-        }),
-      },
+    fireEvent.change(getNameInput(), { target: { value: 'github' } });
+    // El id se autoderiva, no hace falta tocarlo.
+    fireEvent.change(getArgsInput(), {
+      target: { value: '-y\n@modelcontextprotocol/server-github' },
     });
 
-    const button = screen.getByRole('button', { name: /add server/i });
+    const button = getSubmitButton();
     expect(button.hasAttribute('disabled')).toBe(false);
     fireEvent.click(button);
 
     await waitFor(() => {
       expect(mockAddServerApi).toHaveBeenCalledTimes(1);
     });
+    // Lo que se envía a la API debe ser un McpServerConfig válido,
+    // con transport fijo a "stdio" y args como array.
+    const submitted = mockAddServerApi.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(submitted).toMatchObject({
+      id: 'github',
+      name: 'github',
+      transport: 'stdio',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-github'],
+    });
+
     await waitFor(() => {
       expect(onSelectServer).toHaveBeenCalledWith('github');
     });
@@ -189,7 +255,7 @@ describe('HomePage', () => {
     render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
       wrapper: makeWrapper(),
     });
-    fireEvent.click(screen.getByRole('button', { name: /add server/i }));
+    fireEvent.click(getSubmitButton());
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain('invalid McpServerConfig');
@@ -203,20 +269,11 @@ describe('HomePage', () => {
       wrapper: makeWrapper([makeServer('github')]),
     });
 
-    const textarea = screen.getByLabelText('JSON config');
-    fireEvent.change(textarea, {
-      target: {
-        value: JSON.stringify({
-          id: 'github',
-          name: 'github',
-          transport: 'stdio',
-          command: 'npx',
-          args: [],
-        }),
-      },
-    });
+    // name: github -> id autoderiva a "github" (ya existe en la lista).
+    fireEvent.change(getNameInput(), { target: { value: 'github' } });
+    expect(getIdInput().value).toBe('github');
 
-    const button = screen.getByRole('button', { name: /add server/i });
+    const button = getSubmitButton();
     expect(button.hasAttribute('disabled')).toBe(true);
     expect(mockAddServerApi).not.toHaveBeenCalled();
   });
@@ -228,7 +285,7 @@ describe('HomePage', () => {
     render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
       wrapper: makeWrapper(),
     });
-    fireEvent.click(screen.getByRole('button', { name: /add server/i }));
+    fireEvent.click(getSubmitButton());
 
     await waitFor(() => {
       const status = screen.getByRole('status');
@@ -247,7 +304,7 @@ describe('HomePage', () => {
     render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
       wrapper: makeWrapper(),
     });
-    fireEvent.click(screen.getByRole('button', { name: /add server/i }));
+    fireEvent.click(getSubmitButton());
 
     await waitFor(() => {
       expect(screen.getByRole('alert').textContent).toContain('boom');
@@ -258,5 +315,28 @@ describe('HomePage', () => {
     await waitFor(() => {
       expect(screen.queryByRole('alert')).toBeNull();
     });
+  });
+
+  it('parses env text as KEY=value pairs and omits them when empty', async () => {
+    const newServer = makeServer('daisy', 'daisy');
+    mockAddServerApi.mockResolvedValue({ server: newServer });
+
+    render(<HomePage onNavigate={onNavigate} onSelectServer={onSelectServer} />, {
+      wrapper: makeWrapper(),
+    });
+    // Cambiamos a un id único para que el botón se habilite, y
+    // abrimos "Advanced" para tocar env.
+    fireEvent.change(getNameInput(), { target: { value: 'daisy' } });
+    fireEvent.click(screen.getByRole('button', { name: /advanced/i }));
+    fireEvent.change(getEnvInput(), {
+      target: { value: 'LICENSE=\nEMAIL=user@example.com' },
+    });
+    fireEvent.click(getSubmitButton());
+
+    await waitFor(() => {
+      expect(mockAddServerApi).toHaveBeenCalledTimes(1);
+    });
+    const submitted = mockAddServerApi.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(submitted.env).toEqual({ LICENSE: '', EMAIL: 'user@example.com' });
   });
 });
