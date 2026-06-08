@@ -14,15 +14,9 @@ type Props = {
   disabled?: boolean;
   /** ID opcional para accesibilidad. */
   id?: string;
-  /**
-   * Oculta el botón "from schema". Útil cuando el editor se usa
-   * fuera del contexto de tool arguments (por ejemplo, al añadir
-   * una config de servidor donde no aplica derivar un ejemplo).
-   */
-  hideSchemaButton?: boolean;
 };
 
-export function JsonEditor({ initial, schema, onChange, disabled, id, hideSchemaButton }: Props) {
+export function JsonEditor({ initial, schema, onChange, disabled, id }: Props) {
   const reactId = useId();
   const fieldId = id ?? reactId;
   const [text, setText] = useState(initial ?? '');
@@ -72,11 +66,9 @@ export function JsonEditor({ initial, schema, onChange, disabled, id, hideSchema
           <Button variant="ghost" compact onClick={handleFormat} disabled={disabled || !parsed.ok}>
             format
           </Button>
-          {!hideSchemaButton && (
-            <Button variant="ghost" compact onClick={handleFillExample} disabled={disabled}>
-              from schema
-            </Button>
-          )}
+          <Button variant="ghost" compact onClick={handleFillExample} disabled={disabled}>
+            from schema
+          </Button>
           <Button variant="ghost" compact onClick={handleClear} disabled={disabled || text.length === 0}>
             clear
           </Button>
