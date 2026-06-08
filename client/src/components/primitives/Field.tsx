@@ -22,6 +22,11 @@ type TextareaProps = CommonProps &
 export function Field(props: InputProps | TextareaProps) {
   const { label, hint, error, id } = props;
   const errorId = id ? `${id}-error` : undefined;
+  // Extraemos props que son solo del wrapper y no deben propagarse
+  // al elemento nativo (evita warnings de React por atributos
+  // booleanos desconocidos en el DOM).
+  const { mono, as: _as, ...rest } = props as InputProps;
+  void _as;
   return (
     <div className={styles.field}>
       {label && (
@@ -33,20 +38,17 @@ export function Field(props: InputProps | TextareaProps) {
         <textarea
           id={id}
           className={styles.textarea}
-          {...(props as TextareaHTMLAttributes<HTMLTextAreaElement>)}
+          {...(rest as TextareaHTMLAttributes<HTMLTextAreaElement>)}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
         />
       ) : (
         <input
           id={id}
-          className={[
-            styles.input,
-            (props as InputProps).mono ? styles.inputMono : '',
-          ]
+          className={[styles.input, mono ? styles.inputMono : '']
             .filter(Boolean)
             .join(' ')}
-          {...(props as InputHTMLAttributes<HTMLInputElement>)}
+          {...(rest as InputHTMLAttributes<HTMLInputElement>)}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
         />

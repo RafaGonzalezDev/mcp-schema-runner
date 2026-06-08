@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Button } from '../components/primitives/Button';
 import { ErrorBanner } from '../components/primitives/ErrorBanner';
-import { JsonEditor } from '../components/traces/JsonEditor';
+import { Field } from '../components/primitives/Field';
 import { useAddServer, useServers } from '../lib/hooks';
-import { parseJson } from '../lib/format';
+import type { McpServerConfig } from '../../../shared/types';
 import type { Route } from '../lib/router';
 import styles from './HomePage.module.css';
 
@@ -52,61 +52,142 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
 ];
 
 /**
- * Configuración de partida para el editor. Es la misma que la
- * fixture `filesystem`, útil como ejemplo y como punto de partida
- * para que el usuario solo tenga que cambiar `id` y `args`.
+ * Starter values for the form. Reuses the same shape as the
+ * `filesystem` fixture, so the user only has to change the id
+ * (or the name) to add their own MCP server.
  */
-const TEMPLATE_CONFIG = `{
-  "id": "filesystem",
-  "name": "filesystem",
-  "transport": "stdio",
-  "command": "npx",
-  "args": ["-y", "@modelcontextprotocol/server-filesystem", "./fixtures-workspace"],
-  "env": {},
-  "cwd": ""
-}`;
+const TEMPLATE_FORM = {
+  name: 'filesystem',
+  id: 'filesystem',
+  command: 'npx',
+  argsText: '-y\n@modelcontextprotocol/server-filesystem\n./fixtures-workspace',
+  cwd: '',
+  envText: '',
+} as const;
+
+type FormState = {
+  name: string;
+  id: string;
+  command: string;
+  argsText: string;
+  cwd: string;
+  envText: string;
+};
 
 type Props = {
   onNavigate: (route: Route) => void;
   onSelectServer: (id: string) => void;
 };
 
+/** Parses a one-argument-per-line textarea into a string[]. Blank lines are dropped. */
+function parseArgsText(text: string): string[] {
+  return text.split('\n').map((l) => l.trim()).filter(Boolean);
+}
+
+/** Parses a `KEY=value` per line textarea into a Record. Invalid lines are dropped. */
+function parseEnvText(text: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const eq = line.indexOf('=');
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) continue;
+    out[key] = line.slice(eq + 1);
+  }
+  return out;
+}
+
+/** Lowercase, ascii-only slug used to auto-derive the id from the name. */
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
 export function HomePage({ onNavigate, onSelectServer }: Props) {
   const { data: servers = [] } = useServers();
   const addServer = useAddServer();
 
-  const [argsText, setArgsText] = useState<string>(TEMPLATE_CONFIG);
+  const [form, setForm] = useState<FormState>({ ...TEMPLATE_FORM });
+  // Tracks whether the user has manually edited the id field. When
+  // false, name changes auto-update the id via `slugify`.
+  const [idTouched, setIdTouched] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const parsed = useMemo(() => parseJson(argsText), [argsText]);
+  function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => {
+      const next = { ...prev, [key]: value };
+      if (key === 'name' && !idTouched) {
+        next.id = slugify(value);
+      }
+      return next;
+    });
+  }
 
-  /**
-   * Comprueba si el `id` del JSON parseado ya existe en la lista
-   * de servidores (fixtures + store). Se calcula en cliente para
-   * cortar el flujo antes de pegarle al backend; el backend acepta
-   * duplicados, pero la UX es más clara con un error temprano.
-   */
-  const duplicateId = useMemo<string | null>(() => {
-    if (!parsed.ok) return null;
-    const value = parsed.value;
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
-    const id = (value as Record<string, unknown>).id;
-    if (typeof id !== 'string' || id.length === 0) return null;
-    return servers.some((s) => s.config.id === id) ? id : null;
-  }, [parsed, servers]);
+  // Field-level validation. The submit button is gated on this
+  // object having no keys; individual errors are surfaced inline on
+  // the corresponding `Field`.
+  const errors = useMemo(() => {
+    const e: {
+      name?: string;
+      id?: string;
+      command?: string;
+      args?: string;
+      env?: string;
+    } = {};
+    if (form.name.trim().length === 0) e.name = 'name is required';
+    const trimmedId = form.id.trim();
+    // El id del form puede coincidir con el servidor recién añadido
+    // (caso de éxito): en ese caso la colisión es "esperada" y
+    // omitimos el error para no contaminar el estado post-éxito,
+    // que está a punto de desmontarse al navegar al inspector.
+    const justAddedId = addServer.data?.config.id;
+    if (trimmedId.length === 0) {
+      e.id = 'id is required';
+    } else if (
+      trimmedId !== justAddedId &&
+      servers.some((s) => s.config.id === trimmedId)
+    ) {
+      e.id = `a server with id "${trimmedId}" already exists in your runner`;
+    }
+    if (form.command.trim().length === 0) e.command = 'command is required';
+    if (parseArgsText(form.argsText).length === 0) {
+      e.args = 'at least one argument is required';
+    }
+    const envLines = form.envText.split('\n').map((l) => l.trim()).filter(Boolean);
+    for (const line of envLines) {
+      if (!/^[A-Z_][A-Z0-9_]*=.*$/.test(line)) {
+        e.env = `invalid line: "${line}" — expected KEY=value (uppercase key)`;
+        break;
+      }
+    }
+    return e;
+  }, [form, servers, addServer.data]);
 
+  const hasErrors = Object.keys(errors).length > 0;
   const errorMessage = localError ?? addServer.error?.message ?? null;
-  const canSubmit = parsed.ok && !duplicateId && !addServer.isPending;
+  const canSubmit = !hasErrors && !addServer.isPending;
 
   const handleAdd = async () => {
-    if (!parsed.ok) return;
-    if (duplicateId) {
-      setLocalError(`a server with id "${duplicateId}" already exists in your runner`);
-      return;
-    }
+    if (hasErrors) return;
     setLocalError(null);
+    const config: McpServerConfig = {
+      id: form.id.trim(),
+      name: form.name.trim(),
+      transport: 'stdio',
+      command: form.command.trim(),
+      args: parseArgsText(form.argsText),
+      ...(form.cwd.trim() ? { cwd: form.cwd.trim() } : {}),
+      ...(form.envText.trim() ? { env: parseEnvText(form.envText) } : {}),
+    };
     try {
-      const server = await addServer.mutateAsync(parsed.value);
+      const server = await addServer.mutateAsync(config);
       onSelectServer(server.config.id);
       onNavigate('inspector');
     } catch (err) {
@@ -158,9 +239,10 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           <span className={styles.sectionIndex}>05</span>
         </div>
         <p className={styles.stepText}>
-          Paste a JSON config below to add a custom MCP server to your runner.
-          The server is persisted to <code>server/.data/servers.json</code> and
-          is available in the inspector immediately.
+          Fill in the fields below to add a custom MCP server. The runner
+          builds the configuration for you and persists it to{' '}
+          <code>server/.data/servers.json</code>, where it becomes
+          available in the inspector immediately.
         </p>
 
         <ErrorBanner
@@ -169,22 +251,84 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           resetKey={errorMessage ?? ''}
         />
 
-        <div className={styles.formGroup}>
-          <label htmlFor="add-server-config" className={styles.formLabel}>
-            JSON config
-          </label>
-          <JsonEditor
-            id="add-server-config"
-            initial={argsText}
-            onChange={setArgsText}
-            hideSchemaButton
-          />
-          <div className={styles.formHint}>
-            must include <code>id</code>, <code>name</code>,{' '}
-            <code>transport: "stdio"</code>, <code>command</code>,{' '}
-            <code>args[]</code>; <code>env</code> and <code>cwd</code> are
-            optional
-          </div>
+        <Field
+          id="add-server-name"
+          label="name"
+          value={form.name}
+          onChange={(e) => setField('name', e.target.value)}
+          placeholder="filesystem"
+          hint={!errors.name ? 'display name shown in the UI' : undefined}
+          error={errors.name}
+        />
+        <Field
+          id="add-server-id"
+          label="id"
+          mono
+          value={form.id}
+          onChange={(e) => {
+            setIdTouched(true);
+            setField('id', e.target.value);
+          }}
+          placeholder="filesystem"
+          hint={!errors.id ? 'unique identifier used by the API. auto-derived from name until edited' : undefined}
+          error={errors.id}
+        />
+        <Field
+          id="add-server-command"
+          label="command"
+          value={form.command}
+          onChange={(e) => setField('command', e.target.value)}
+          placeholder="npx"
+          hint={!errors.command ? 'executable to spawn (npx, node, python, uvx...)' : undefined}
+          error={errors.command}
+        />
+        <Field
+          as="textarea"
+          id="add-server-args"
+          label="arguments"
+          value={form.argsText}
+          onChange={(e) => setField('argsText', e.target.value)}
+          placeholder={'-y\n@modelcontextprotocol/server-filesystem'}
+          hint={!errors.args ? 'one argument per line; blank lines are ignored' : undefined}
+          error={errors.args}
+        />
+
+        <div className={styles.advanced}>
+          <button
+            type="button"
+            className={styles.advancedToggle}
+            onClick={() => setShowAdvanced((v) => !v)}
+            aria-expanded={showAdvanced}
+            aria-controls="add-server-advanced"
+          >
+            <span className={styles.advancedArrow} aria-hidden="true">
+              {showAdvanced ? '▾' : '▸'}
+            </span>
+            <span className={styles.advancedLabel}>Advanced</span>
+            <span className={styles.advancedHint}>cwd · env</span>
+          </button>
+          {showAdvanced && (
+            <div id="add-server-advanced" className={styles.advancedBody}>
+              <Field
+                id="add-server-cwd"
+                label="working directory"
+                value={form.cwd}
+                onChange={(e) => setField('cwd', e.target.value)}
+                placeholder="./fixtures-workspace"
+                hint="optional. where the command runs from"
+              />
+              <Field
+                as="textarea"
+                id="add-server-env"
+                label="environment variables"
+                value={form.envText}
+                onChange={(e) => setField('envText', e.target.value)}
+                placeholder={'LICENSE=\nEMAIL='}
+                hint="optional. one KEY=value per line; value may be empty"
+                error={errors.env}
+              />
+            </div>
+          )}
         </div>
 
         <div className={styles.addActions}>
