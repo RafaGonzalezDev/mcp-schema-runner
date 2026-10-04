@@ -4,7 +4,7 @@ The React client configures stdio servers, inspects schemas and executes manual 
 
 ## Key components
 
-- [HomePage](../../client/src/pages/HomePage.tsx) validates on blur and submit, focuses the first invalid field and permits empty command arguments. Session values and backend variable references are separate inputs; validation errors never echo submitted values.
+- [HomePage](../../client/src/pages/HomePage.tsx) validates on blur and submit, focuses the first invalid field and permits empty command arguments. Its starter values copy the bundled offline `demo` under the distinct `my-server` id, so the untouched form submits and connects immediately; reusing a built-in id reports that it is reserved. Session values and backend variable references are separate inputs; validation errors never echo submitted values.
 - [InspectorPage](../../client/src/pages/InspectorPage.tsx) owns selected tools and drafts keyed by server/tool while mounted. Polling, reconnects and schema changes do not replace drafts. Only the explicit “from schema” action regenerates an example.
 - [Hooks](../../client/src/lib/hooks.ts) keep the complete `ServersResponse` envelope in TanStack Query, expose migration metadata and subscribe to the last trace. API health is offline after a failed refetch even when old success data remain cached.
 - [MigrationNotice](../../client/src/components/shell/MigrationNotice.tsx) requires explicit confirmation before rewriting a legacy configuration without literal environment values. Existing values remain in backend memory for that session; after restarting, the inspector requests replacement values.

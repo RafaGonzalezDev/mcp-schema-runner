@@ -33,7 +33,7 @@ All project paths are rooted at this checkout, independently of the working dire
 
 ## Use
 
-1. Add a canonical stdio configuration, or select an optional built-in demo.
+1. Add a canonical stdio configuration, or select a built-in demo. The bundled `demo` server needs no download and is the fastest way to verify the runner end to end.
 2. Select the server in Inspector and press **connect**. Nothing connects automatically.
 3. Choose a tool and inspect its schema. Edit the example JSON; arguments must be an object.
 4. Run the tool. Inspect the exact argument object passed to the SDK, its processed result or error, duration and timestamp.
@@ -90,17 +90,18 @@ Existing unversioned `{ "servers": [...] }` documents require explicit confirmat
 
 **Trust every executable and tool you connect.** MCP processes run with your OS permissions and can read files, access networks, spawn descendants and echo secrets in results or stderr. This application is not a sandbox; authentication is not protection against a malicious local process with the same permissions. The trace viewer deliberately displays tool output, which may be sensitive. Do not pass secrets through arguments, notes or arbitrary metadata: those are persisted and public.
 
-## Optional demos
+## Built-in demos
 
-The built-ins download pinned npm packages on first use; they are not CI fixtures and never auto-connect:
+Built-in ids (`demo`, `filesystem`, `context7`, `playwright`) are reserved: saved servers cannot reuse them. None of the demos auto-connect; each connection is an explicit action.
 
-| Demo | Package | Requirements |
+| Demo | Source | Requirements |
 | --- | --- | --- |
+| demo | [server/examples/demo-server.mjs](<server/examples/demo-server.mjs>) with `echo`, `add` and `now` | None: uses the installed SDK, no network |
 | filesystem | `@modelcontextprotocol/server-filesystem@2026.8.31` | Network to install; operates on the bundled fixtures workspace |
 | context7 | `@upstash/context7-mcp@4.1.1` | Network; service credentials may be required |
 | playwright | `@playwright/mcp@0.0.83` | Network and an installed Chrome browser |
 
-Package downloads execute third-party code. CI uses a small deterministic local MCP server instead, with no external services or credentials.
+The three `npx` demos download pinned packages on first use and are not CI fixtures. Package downloads execute third-party code. CI and the smoke runs use a small deterministic local MCP server instead, with no external services or credentials.
 
 ## API
 

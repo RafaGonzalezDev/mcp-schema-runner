@@ -56,15 +56,15 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
 ];
 
 /**
- * Starter values for the form. Reuses the same shape as the
- * `filesystem` fixture, so the user only has to change the id
- * (or the name) to add their own MCP server.
+ * Starter values for the form. Copies the bundled offline demo under a
+ * distinct id, so the untouched form can be submitted and connected with no
+ * download. Built-in ids stay reserved and can never be reused here.
  */
-const starter = builtinFixtures.find((fixture) => fixture.id === 'filesystem');
+const starter = builtinFixtures.find((fixture) => fixture.id === 'demo');
 const TEMPLATE_FORM = {
-  name: starter?.name ?? 'filesystem',
-  id: starter?.id ?? 'filesystem',
-  command: starter?.command ?? 'npx',
+  name: 'my-server',
+  id: 'my-server',
+  command: starter?.command ?? 'node',
   argsText: starter?.args.join('\n') ?? '',
   cwd: '',
   envText: '',
@@ -129,9 +129,12 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
   const errors = useMemo(() => {
     const e: Partial<Record<keyof FormState, string>> = {};
     if (!form.name.trim()) e.name = 'name is required';
+    const takenId = servers.find((s) => s.config.id === form.id.trim());
     if (!form.id.trim()) e.id = 'id is required';
-    else if (form.id.trim() !== addServer.data?.config.id && servers.some((s) => s.config.id === form.id.trim())) {
-      e.id = 'this id is already configured; choose a unique id';
+    else if (takenId && takenId.config.id !== addServer.data?.config.id) {
+      e.id = takenId.builtin
+        ? 'this id is reserved by a built-in demo; choose a unique id'
+        : 'this id is already configured; choose a unique id';
     }
     if (!form.command.trim()) e.command = 'command is required';
     if (!environment.ok) e.envText = environment.error;
@@ -228,7 +231,7 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           label="name"
           value={form.name}
           onChange={(e) => setField('name', e.target.value)}
-          placeholder="filesystem"
+          placeholder="my-server"
           hint={!errors.name ? 'display name shown in the UI' : undefined}
           error={visibleError('name')}
           onBlur={() => markTouched('name')}
@@ -243,8 +246,8 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
             setIdTouched(true);
             setField('id', e.target.value);
           }}
-          placeholder="filesystem"
-          hint={!errors.id ? 'unique identifier used by the API. auto-derived from name until edited' : undefined}
+          placeholder="my-server"
+          hint={!errors.id ? 'unique identifier used by the API. auto-derived from name until edited. built-in demo ids are reserved' : undefined}
           error={visibleError('id')}
           onBlur={() => markTouched('id')}
           required aria-required="true"

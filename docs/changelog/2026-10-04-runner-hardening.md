@@ -13,3 +13,11 @@
 **Where**: [MCP manager](<../../server/src/mcp/manager.ts>), [path resolver](<../../server/src/config/projectPaths.ts>), [launch scripts](<../../scripts/dev.mjs>), [Inspector](<../../client/src/pages/InspectorPage.tsx>), [Home](<../../client/src/pages/HomePage.tsx>), [smoke](<../../scripts/smoke.mjs>) and [CI](<../../.github/workflows/ci.yml>).
 
 **Why**: Fix connection races, startup failures, inaccurate state and inaccessible controls without changing the product architecture. Validation outcomes and limits belong in [validation overview](<../overview/validation.md>).
+
+## 2026-10-04 — Make the first example testable
+
+**What**: Add a bundled offline demo MCP server (`echo`, `add`, `now`) exposed as the built-in `demo`, and stop pre-filling the add-server form with the reserved `filesystem` id that made the untouched example fail validation. Reusing a built-in id now reports that it is reserved.
+
+**Where**: [demo server](<../../server/examples/demo-server.mjs>), [built-in fixtures](<../../shared/fixtures.ts>), [Home form](<../../client/src/pages/HomePage.tsx>) and [fixture tests](<../../server/src/config/fixtures.test.ts>).
+
+**Why**: The pre-configured example could not be added or verified without editing the id and downloading a third-party package.

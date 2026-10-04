@@ -9,7 +9,7 @@ import * as api from '../lib/api';
 import { qk } from '../lib/hooks';
 import { HomePage } from './HomePage';
 
-const server = (id: string): McpServerState => ({ config: { id, name: id, transport: 'stdio', command: 'node', args: [] }, status: 'disconnected', tools: [] });
+const server = (id: string, builtin = false): McpServerState => ({ config: { id, name: id, transport: 'stdio', command: 'node', args: [] }, status: 'disconnected', tools: [], ...(builtin ? { builtin: true } : {}) });
 let clients: QueryClient[] = [];
 function wrapper(servers: McpServerState[] = [], migrationPending = false) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false } } });
@@ -38,12 +38,29 @@ function mount(servers: McpServerState[] = [], pending = false) {
 describe('HomePage', () => {
   it('renders the starter fields with accessible labels and linked hints', () => {
     mount();
-    expect(input('name').value).toBe('filesystem');
-    expect(input('command').value).toBe('npx');
+    expect(input('name').value).toBe('my-server');
+    expect(input('command').value).toBe('node');
     expect(input('arguments').getAttribute('aria-describedby')).toBeTruthy();
     expect(input('name').getAttribute('label')).toBeNull();
     expect(input('name').getAttribute('hint')).toBeNull();
     expect(input('name').getAttribute('required')).not.toBeNull();
+  });
+
+  it('submits the untouched starter because its id is not a reserved built-in', async () => {
+    mount([server('demo', true), server('filesystem', true)]);
+    fireEvent.click(submit());
+    expect(input('id').getAttribute('aria-invalid')).toBeNull();
+    expect(screen.queryByText(/choose a unique id/)).toBeNull();
+    await waitFor(() => expect(api.addServer).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(api.addServer).mock.calls[0]?.[0]).toMatchObject({ id: 'my-server', command: 'node', args: ['server/examples/demo-server.mjs'] });
+  });
+
+  it('explains that a built-in demo id is reserved', () => {
+    mount([server('demo', true)]);
+    change('id', 'demo');
+    fireEvent.click(submit());
+    expect(screen.getByText(/reserved by a built-in demo/)).toBeTruthy();
+    expect(api.addServer).not.toHaveBeenCalled();
   });
 
   it('permits an executable without arguments and navigates after saving', async () => {
@@ -72,6 +89,7 @@ describe('HomePage', () => {
 
   it('rejects duplicate ids on submit without disabling initial validation', () => {
     mount([server('filesystem')]);
+    change('id', 'filesystem');
     expect((submit() as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(submit());
     expect(screen.getByText(/this id is already configured/)).toBeTruthy();

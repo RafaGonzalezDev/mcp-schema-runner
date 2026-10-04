@@ -1,25 +1,31 @@
 /**
- * Fixtures de configuraciones MCP normalizadas.
+ * Built-in example configurations, shared by the client and the server.
  *
- * Compartidas entre cliente y servidor:
- *   - El servidor las inyecta como built-ins al construir el router y
- *     expande paths relativos a absolutos si es necesario.
- *   - El cliente las usa para mostrar snippets en la HomePage.
+ * The server injects them as built-ins when building the router and expands
+ * relative working directories (see `server/src/config/expandPaths.ts`).
+ * The client uses them for the Home page starter values.
  *
- * IMPORTANTE: ninguna se conecta automáticamente al iniciar la app
- * (mitigación de riesgo de ejecución de comandos locales).
- *
- * NOTA sobre rutas: los paths de los fixtures se mantienen como
- * strings simples. El servidor los convierte en absolutos al
- * cargarlos (ver `server/src/config/expandPaths.ts`).
+ * None of them connect automatically: every connection stays an explicit user
+ * action. `demo` runs a bundled offline script; the rest download third-party
+ * packages and need network access.
  */
 
 import type { McpServerConfig } from './types.js';
 
-/** Path relativo al repo, usado por el server para resolver el absoluto. */
+/** Workspace path relative to the checkout, resolved by the server. */
 export const FIXTURES_WORKSPACE = './fixtures-workspace';
 
 export const builtinFixtures: McpServerConfig[] = [
+  {
+    id: 'demo',
+    name: 'demo',
+    transport: 'stdio',
+    command: 'node',
+    args: ['server/examples/demo-server.mjs'],
+    env: {},
+    source: 'inline',
+    notes: 'Bundled offline demo with echo, add and now tools. No download or network access.',
+  },
   {
     id: 'filesystem',
     name: 'filesystem',
