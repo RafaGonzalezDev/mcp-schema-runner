@@ -102,7 +102,7 @@ function slugify(value: string): string {
 }
 
 export function HomePage({ onNavigate, onSelectServer }: Props) {
-  const { data: servers = [], migrationPending, error: serversError, isLoading: serversLoading } = useServers();
+  const { data: servers = [], migrationPending, error: serversError, isLoading: serversLoading, refetch } = useServers();
   const addServer = useAddServer();
 
   const [form, setForm] = useState<FormState>({ ...TEMPLATE_FORM });
@@ -175,50 +175,95 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
   const handleDismissError = () => addServer.reset();
 
   const success = addServer.data;
+  const demo = servers.find((server) => server.config.id === 'demo');
+  const canOpenDemo = !!demo && !serversLoading && !serversError && !migrationPending;
+  const demoHint = migrationPending ? 'Review the configuration migration before testing a server.'
+    : serversError ? 'The backend is unavailable. Retry the server list below.'
+    : serversLoading ? 'Loading the built-in demo…'
+    : !demo ? 'The demo is not available in this backend. Choose a listed server or add your own.'
+    : 'Opens the inspector only. You decide when to connect and run a tool.';
+
+  function inspectServer(id: string) {
+    onSelectServer(id);
+    onNavigate('inspector');
+  }
 
   return (
     <div className={styles.home}>
       <header className={styles.hero}>
-        <div className={styles.eyebrow}>mcp-schema-runner · v0.1</div>
-        <h1 className={styles.title}>Debug stdio MCP servers locally.</h1>
-        <p className={styles.lead}>
-          Inspect tool schemas, execute manual tool calls and inspect raw
-          argument / result / error traces — everything you need to validate a
-          Model Context Protocol server before plugging it into an agent.
-        </p>
+        <div className={styles.heroCopy}>
+          <div className={styles.eyebrow}>local workspace / stdio MCP</div>
+          <h1 className={styles.title}>From server schema<br />to a real result.</h1>
+          <p className={styles.lead}>
+            Choose a server here. Connect, inspect its tools and run a call in
+            the inspector — with the exact SDK arguments and result in view.
+          </p>
+          <a className={styles.textLink} href="#add-custom-server">Configure your own server</a>
+        </div>
+        <section className={styles.quickstart} aria-labelledby="quickstart-title">
+          <div className={styles.quickstartTop}><span className={styles.eyebrow}>start here</span><span className={styles.offline}>offline demo</span></div>
+          <h2 id="quickstart-title" className={styles.quickstartTitle}>Try the complete workflow.</h2>
+          <p className={styles.stepText}>Use the bundled demo to explore a tool schema, edit arguments and inspect a result. No downloads or credentials.</p>
+          <Button variant="primary" disabled={!canOpenDemo} aria-describedby="demo-hint" onClick={() => { if (canOpenDemo) inspectServer('demo'); }}>
+            open demo in inspector
+          </Button>
+          <p id="demo-hint" className={styles.smallText}>{demoHint}</p>
+        </section>
       </header>
 
-      <section className={styles.section}>
+      <MigrationNotice pending={migrationPending} />
+
+      <section className={styles.section} aria-labelledby="configured-servers-title" aria-busy={serversLoading}>
         <div className={styles.sectionHead}>
-          <h2 className={styles.sectionTitle}>How to test a server manually</h2>
-          <span className={styles.sectionIndex}>01 — 04</span>
+          <div><div className={styles.sectionIndex}>01 / choose a server</div><h2 id="configured-servers-title" className={styles.sectionTitle}>Your configured servers</h2></div>
+          <span className={styles.sectionMeta}>{servers.length} available</span>
         </div>
-        <ol className={styles.steps} style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        <p className={styles.stepText}>Open an existing configuration in the inspector. This does not add a copy or start a process.</p>
+        {serversLoading ? <p className={styles.listMessage} role="status">Loading server configurations…</p>
+          : serversError ? <div className={styles.listMessage}><p role="status">Cannot load the server list. Check that the backend is running, then retry.</p><Button variant="ghost" onClick={() => { void refetch(); }}>retry server list</Button></div>
+          : servers.length === 0 ? <div className={styles.listMessage}><p>No servers are configured yet. Add a stdio server below to start a session.</p><a className={styles.textLink} href="#add-custom-server">Add your first server</a></div>
+          : <ul className={styles.serverGrid} aria-label="Configured servers">
+            {servers.map((server) => (
+              <li key={server.config.id}>
+                <button type="button" className={styles.serverCard} aria-label={`inspect ${server.config.name}`} onClick={() => inspectServer(server.config.id)}>
+                  <span className={styles.cardTop}><span className={styles.serverKind}>{server.builtin ? 'built-in' : 'custom'} / {server.config.transport}</span><span className={styles.serverStatus} data-status={server.status}><span className={styles.statusDot} aria-hidden="true" />{server.status}</span></span>
+                  <span className={styles.serverName}>{server.config.name}</span>
+                  <span className={styles.serverId}>{server.config.id}</span>
+                  <span className={styles.cardContext}>{server.missingEnvKeys?.length ? `${server.missingEnvKeys.length} environment ${server.missingEnvKeys.length === 1 ? 'value' : 'values'} needed`
+                    : server.status === 'connected' ? `${server.tools.length} ${server.tools.length === 1 ? 'tool' : 'tools'} ready`
+                    : server.status === 'connecting' ? 'Initializing the connection'
+                    : server.status === 'error' ? 'Review connection in inspector'
+                    : 'Ready to inspect and connect'}</span>
+                  <span className={styles.cardAction}>open inspector</span>
+                </button>
+              </li>
+            ))}
+          </ul>}
+      </section>
+
+      <details className={styles.guide}>
+        <summary>How a testing session works <span className={styles.guideMeta}>configure / connect / inspect / run</span></summary>
+        <ol className={styles.steps}>
           {STEPS.map((s, i) => (
             <li key={s.title} className={styles.step}>
               <span className={styles.stepIndex}>{String(i + 1).padStart(2, '0')}</span>
-              <div className={styles.stepBody}>
-                <span className={styles.stepTitle}>{s.title}</span>
-                <span className={styles.stepText}>{s.body}</span>
-              </div>
+              <div className={styles.stepBody}><span className={styles.stepTitle}>{s.title}</span><span className={styles.stepText}>{s.body}</span></div>
             </li>
           ))}
         </ol>
-      </section>
+      </details>
 
-      <section className={styles.section}>
+      <section id="add-custom-server" className={styles.section} aria-labelledby="add-server-title">
         <div className={styles.sectionHead}>
-          <h2 className={styles.sectionTitle}>Add a server to your runner</h2>
-          <span className={styles.sectionIndex}>05</span>
+          <div><div className={styles.sectionIndex}>02 / custom configuration</div><h2 id="add-server-title" className={styles.sectionTitle}>Add your own server</h2></div>
+          <span className={styles.sectionMeta}>saved locally</span>
         </div>
         <p className={styles.stepText}>
-          Fill in the fields below to add a custom MCP server. The runner
-          saves the command, variable names and backend references locally.
-          Literal environment values are held in backend memory for this session only.
+          Use the offline demo starter as-is with a unique id, or replace it with
+          your own command. Command and variable names are saved locally;
+          literal environment values stay in memory for this session only.
         </p>
-
-        <MigrationNotice pending={migrationPending} />
-        <p className={styles.stepText}>Name, id and command are required. Arguments may be empty.</p>
+        <p className={styles.smallText}>Name, id and command are required. Arguments may be empty.</p>
         <form className={styles.addForm} ref={formRef} noValidate onSubmit={(event) => { event.preventDefault(); handleAdd(); }}>
         <ErrorBanner
           error={errorMessage}
@@ -226,6 +271,7 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           resetKey={errorMessage ?? ''}
         />
 
+        <div className={styles.formIdentity}>
         <Field
           id="add-server-name"
           label="name"
@@ -252,6 +298,7 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           onBlur={() => markTouched('id')}
           required aria-required="true"
         />
+        </div>
         <Field
           id="add-server-command"
           label="command"

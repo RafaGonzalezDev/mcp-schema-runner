@@ -36,6 +36,81 @@ function mount(servers: McpServerState[] = [], pending = false) {
 }
 
 describe('HomePage', () => {
+  it('opens the existing offline demo without adding or running a server', () => {
+    const { onNavigate, onSelectServer } = mount([server('demo', true)]);
+    fireEvent.click(screen.getByRole('button', { name: 'open demo in inspector' }));
+    expect(onSelectServer).toHaveBeenCalledWith('demo');
+    expect(onNavigate).toHaveBeenCalledWith('inspector');
+    expect(api.addServer).not.toHaveBeenCalled();
+    expect(api.migrateConfig).not.toHaveBeenCalled();
+    expect(screen.getByText(/you decide when to connect/i)).toBeTruthy();
+  });
+
+  it('does not navigate to a demo missing from the backend list', () => {
+    const { onNavigate, onSelectServer } = mount([server('custom')]);
+    const demoButton = screen.getByRole('button', { name: 'open demo in inspector' }) as HTMLButtonElement;
+    expect(demoButton.disabled).toBe(true);
+    fireEvent.click(demoButton);
+    expect(onSelectServer).not.toHaveBeenCalled();
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(screen.getByText(/demo is not available in this backend/i)).toBeTruthy();
+  });
+
+  it('opens configured server cards without adding a duplicate', () => {
+    const configured = { ...server('existing'), missingEnvKeys: ['TOKEN'] };
+    const { onNavigate, onSelectServer } = mount([configured]);
+    expect(screen.getByText('1 environment value needed')).toBeTruthy();
+    expect(screen.queryByText('TOKEN')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'inspect existing' }));
+    expect(onSelectServer).toHaveBeenCalledWith('existing');
+    expect(onNavigate).toHaveBeenCalledWith('inspector');
+    expect(api.addServer).not.toHaveBeenCalled();
+  });
+
+  it('keeps guidance collapsed and explains an empty server list', () => {
+    mount();
+    const guide = screen.getByText('How a testing session works').closest('details');
+    expect(guide?.open).toBe(false);
+    expect(screen.getByText(/no servers are configured yet/i)).toBeTruthy();
+    expect(screen.getByRole('link', { name: /add your first server/i }).getAttribute('href')).toBe('#add-custom-server');
+  });
+
+  it('keeps demo execution gated during migration while allowing inspection navigation', () => {
+    const { onNavigate, onSelectServer } = mount([server('demo', true)], true);
+    expect((screen.getByRole('button', { name: 'open demo in inspector' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/review the configuration migration before testing/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'inspect demo' }));
+    expect(onSelectServer).toHaveBeenCalledWith('demo');
+    expect(onNavigate).toHaveBeenCalledWith('inspector');
+    expect(api.addServer).not.toHaveBeenCalled();
+    expect(api.migrateConfig).not.toHaveBeenCalled();
+  });
+
+  it('shows loading and disables quick start before server data arrive', () => {
+    vi.mocked(api.listServers).mockImplementation(() => new Promise(() => {}));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    clients.push(client);
+    render(<QueryClientProvider client={client}><HomePage onNavigate={vi.fn()} onSelectServer={vi.fn()} /></QueryClientProvider>);
+    expect(screen.getByText('Loading server configurations…')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'open demo in inspector' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((submit() as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('offers retry and disables quick start after a backend error', async () => {
+    vi.mocked(api.listServers).mockRejectedValue(new Error('Backend unavailable'));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+    clients.push(client);
+    render(<QueryClientProvider client={client}><HomePage onNavigate={vi.fn()} onSelectServer={vi.fn()} /></QueryClientProvider>);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'retry server list' })).toBeTruthy());
+    expect((screen.getByRole('button', { name: 'open demo in inspector' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((submit() as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/cannot load the server list/i)).toBeTruthy();
+    vi.mocked(api.listServers).mockResolvedValue({ servers: [server('demo', true)], migrationPending: false });
+    fireEvent.click(screen.getByRole('button', { name: 'retry server list' }));
+    await waitFor(() => expect((screen.getByRole('button', { name: 'open demo in inspector' }) as HTMLButtonElement).disabled).toBe(false));
+    expect(api.addServer).not.toHaveBeenCalled();
+  });
+
   it('renders the starter fields with accessible labels and linked hints', () => {
     mount();
     expect(input('name').value).toBe('my-server');
