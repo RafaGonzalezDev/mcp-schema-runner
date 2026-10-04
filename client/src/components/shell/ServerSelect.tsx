@@ -39,11 +39,13 @@ function ChevronIcon() {
 
 export function ServerSelect({ servers, selectedId, onSelect }: Props) {
   const [open, setOpen] = useState(() => {
-    // Soporte para `?open=select` — usado por capturas headless para
-    // verificar el alineamiento del dropdown. No afecta al uso normal.
+    // Allow deterministic dropdown preview without changing normal behavior.
     if (typeof window === 'undefined') return false;
     return new URLSearchParams(window.location.search).get('open') === 'select';
   });
+  const [focusIndex, setFocusIndex] = useState(0);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const search = useRef({ text: '', time: 0 });
   const rootRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const listboxId = useId();
@@ -51,7 +53,16 @@ export function ServerSelect({ servers, selectedId, onSelect }: Props) {
   const current = servers.find((s) => s.config.id === selectedId);
   const isActive = current?.status === 'connected';
 
-  // Cierra al hacer click fuera o al pulsar Escape.
+  useEffect(() => {
+    if (open) optionRefs.current[Math.min(focusIndex, servers.length - 1)]?.focus();
+  }, [open, focusIndex, servers.length]);
+
+  function openMenu(index = Math.max(0, servers.findIndex((server) => server.config.id === selectedId))) {
+    setFocusIndex(index);
+    setOpen(true);
+  }
+
+  // Close on outside interaction or Escape.
   useEffect(() => {
     if (!open) return;
     function onPointer(e: MouseEvent) {
@@ -90,7 +101,13 @@ export function ServerSelect({ servers, selectedId, onSelect }: Props) {
         ref={triggerRef}
         type="button"
         className={[styles.trigger, isActive ? styles.active : ''].filter(Boolean).join(' ')}
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => open ? setOpen(false) : openMenu()}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+            event.preventDefault();
+            openMenu(event.key === 'End' || event.key === 'ArrowUp' ? servers.length - 1 : 0);
+          }
+        }}
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={listboxId}
@@ -104,8 +121,23 @@ export function ServerSelect({ servers, selectedId, onSelect }: Props) {
       </button>
 
       {open && (
-        <ul id={listboxId} className={styles.menu} role="listbox" aria-label="servers">
-          {servers.map((s) => {
+        <ul id={listboxId} className={styles.menu} role="listbox" aria-label="servers"
+          onKeyDown={(event) => {
+            if (event.key === 'Tab') { triggerRef.current?.focus(); setOpen(false); return; }
+            let next: number | undefined;
+            if (event.key === 'ArrowDown') next = (focusIndex + 1) % servers.length;
+            if (event.key === 'ArrowUp') next = (focusIndex - 1 + servers.length) % servers.length;
+            if (event.key === 'Home') next = 0;
+            if (event.key === 'End') next = servers.length - 1;
+            if (event.key.length === 1 && event.key !== ' ' && !event.ctrlKey && !event.metaKey && !event.altKey) {
+              const now = Date.now();
+              search.current = { text: (now - search.current.time < 700 ? search.current.text : '') + event.key.toLowerCase(), time: now };
+              const match = servers.findIndex((server) => server.config.name.toLowerCase().startsWith(search.current.text));
+              if (match >= 0) next = match;
+            }
+            if (next !== undefined) { event.preventDefault(); setFocusIndex(next); }
+          }}>
+          {servers.map((s, index) => {
             const isSelected = s.config.id === selectedId;
             const metaClass =
               s.status === 'connected'
@@ -118,6 +150,9 @@ export function ServerSelect({ servers, selectedId, onSelect }: Props) {
                 <button
                   type="button"
                   role="option"
+                  ref={(element) => { optionRefs.current[index] = element; }}
+                  tabIndex={focusIndex === index ? 0 : -1}
+                  onFocus={() => setFocusIndex(index)}
                   aria-selected={isSelected}
                   className={[styles.option, isSelected ? styles.selected : '']
                     .filter(Boolean)

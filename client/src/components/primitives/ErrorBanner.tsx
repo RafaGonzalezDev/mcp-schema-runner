@@ -16,15 +16,8 @@ type Props = {
   resetKey?: string | number;
 };
 
-/**
- * Banner de error con auto-dismiss opcional.
- *
- * Decisión de UX: los errores transitorios (conexión reusada, timeouts
- * de tool, etc.) deben limpiarse solos para no contaminar la pantalla
- * cuando el siguiente intento tiene éxito. El padre puede forzar el
- * cierre con `onDismiss` o pasando `error={null}`.
- */
-export function ErrorBanner({ error, autoDismissMs = 6000, onDismiss, resetKey }: Props) {
+/** Errors persist by default; auto-dismiss is an explicit opt-in. */
+export function ErrorBanner({ error, autoDismissMs = 0, onDismiss, resetKey }: Props) {
   const [visible, setVisible] = useState(true);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 

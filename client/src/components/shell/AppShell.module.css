@@ -4,6 +4,19 @@
   grid-template-rows: auto 1fr;
 }
 
+.skipLink {
+  position: fixed;
+  top: var(--space-2);
+  left: var(--space-2);
+  z-index: 300;
+  padding: var(--space-3);
+  background: var(--accent);
+  color: var(--accent-fg);
+  transform: translateY(-200%);
+}
+
+.skipLink:focus { transform: translateY(0); }
+
 .main {
   width: 100%;
   max-width: var(--max-width-wide);

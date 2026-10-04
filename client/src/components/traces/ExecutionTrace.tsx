@@ -17,7 +17,14 @@ function formatTimestamp(iso: string): string {
   }
 }
 
-export function ExecutionTrace({ trace, loading, error }: Props) {
+export function ExecutionTrace(props: Props) {
+  const { trace, loading, error } = props;
+  const summary = loading ? 'Executing tool.' : error ? 'Tool request failed.' : trace
+    ? `Tool execution ${trace.status === 'success' ? 'succeeded' : 'failed'} in ${formatDuration(trace.durationMs)}.` : '';
+  return <><p role="status" aria-label="Tool execution status" aria-live="polite" aria-atomic="true">{summary}</p><TraceContent {...props} /></>;
+}
+
+function TraceContent({ trace, loading, error }: Props) {
   if (loading) {
     return (
       <div className={styles.empty}>

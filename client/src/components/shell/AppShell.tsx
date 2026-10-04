@@ -19,8 +19,9 @@ type Props = {
 export function AppShell({ online, currentRoute, onNavigate, children }: Props) {
   return (
     <div className={styles.app}>
+      <a className={styles.skipLink} href="#main-content" onClick={() => document.getElementById('main-content')?.focus()}>Skip to main content</a>
       <TopBar online={online} currentRoute={currentRoute} onNavigate={onNavigate} />
-      <main className={styles.main}>{children}</main>
+      <main id="main-content" tabIndex={-1} className={styles.main}>{children}</main>
     </div>
   );
 }
