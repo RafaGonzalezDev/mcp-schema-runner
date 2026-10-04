@@ -1,20 +1,8 @@
-.layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 18rem;
-  gap: var(--space-6);
-  align-items: start;
-  min-width: 0;
-}
-
-/* ---- Page wrapper ----
-   El PageHeader va fuera del layout, encima de la columna main.
-   El flex gap controla la distancia entre header y main; esa
-   misma distancia se replica en el top del toolsPanel para que
-   ambos queden alineados. */
+/* A compact connection bar above a tools rail and execution workspace. */
 .page {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-5);
   min-width: 0;
 }
 
@@ -24,64 +12,135 @@
   justify-content: space-between;
   gap: var(--space-4);
   flex-wrap: wrap;
-  min-height: var(--header-height);
+  padding-bottom: var(--space-4);
+  border-bottom: var(--hairline);
 }
 
-/* ---- Main row: toolsPanel (izquierda) + panelsColumn (derecha) ----
-   El toolsPanel ya no es fixed: vive en el flujo, alineado al
-   inicio del cross-axis para que no se estire cuando la columna
-   de paneles sea más alta. Los paneles crecen verticalmente
-   dentro de su propia columna. */
-.main {
+.headerLeft {
   display: flex;
-  flex-direction: row;
-  gap: var(--space-6);
-  align-items: flex-start;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.serverIdentity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--tracking-widest);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.connectionState,
+.workspaceBadge {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  padding: var(--space-1) var(--space-2);
+  border: var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+}
+
+.connectionState[data-connected='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+}
+
+.actions { display: flex; gap: var(--space-2); flex: 0 0 auto; }
+
+.serverDetails {
+  background: var(--bg-elevated);
+  border: var(--hairline);
+  border-radius: var(--radius-md);
+  min-width: 0;
+}
+
+.serverDetails > summary {
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+  color: var(--text);
+}
+
+.serverDetails > summary::marker { color: var(--text-muted); }
+.serverDetails[open] > summary { border-bottom: var(--hairline); }
+
+.detailsHint { margin-left: var(--space-4); color: var(--text-muted); }
+
+.main {
+  display: grid;
+  grid-template-columns: 17rem minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: start;
   min-width: 0;
 }
 
 .panelsColumn {
-  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
   gap: var(--space-5);
   min-width: 0;
 }
 
-.headerLeft {
+.workspaceHead {
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-2) 0 var(--space-1);
   min-width: 0;
-  flex: 1 1 auto;
 }
 
-.actions {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex: 0 0 auto;
+.workspaceHead > div { min-width: 0; }
+.toolName {
+  margin: var(--space-2) 0;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-2xl);
+  letter-spacing: var(--tracking-tight);
+  font-weight: var(--font-weight-medium);
+  overflow-wrap: anywhere;
 }
 
-/* ---- Tools panel (en el flujo, a la izquierda del main) ----
-   El panel vive dentro del flex row `.main` y se coloca a la
-   izquierda del `.panelsColumn`. Su altura máxima limita el
-   listado interno de tools: cuando hay más herramientas de las
-   que caben, el `toolsBody` (overflow-y: auto) hace scroll
-   themed y el panel no crece más allá del viewport. El panel
-   en sí se desplaza con la página como cualquier contenedor
-   del flujo principal. */
+.toolDescription {
+  margin: 0;
+  font-size: var(--font-size-sm);
+  line-height: var(--line-height-normal);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.toolPanels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
 .toolsPanel {
-  flex: 0 0 18rem;
-  width: 18rem;
-  max-height: calc(100vh - var(--topbar-height) - var(--header-height) - var(--space-7) * 2);
+  position: sticky;
+  top: calc(var(--topbar-height) + var(--space-4));
+  max-height: calc(100dvh - var(--topbar-height) - var(--space-6));
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-elevated);
+  background: var(--bg-elevated);
   border: var(--hairline);
   border-radius: var(--radius-lg);
   overflow: hidden;
   min-height: 0;
+  min-width: 0;
 }
 
 .toolsHead {
@@ -89,16 +148,21 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-4);
   border-bottom: var(--hairline);
 }
 
 .toolsTitle {
-  font-family: var(--font-mono);
+  margin: 0;
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+}
+
+.toolsHint {
+  margin: var(--space-1) 0 0;
   font-size: var(--font-size-xs);
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-widest);
+  color: var(--text-muted);
+  line-height: var(--line-height-normal);
 }
 
 .toolsCount {
@@ -106,78 +170,59 @@
   font-size: var(--font-size-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text);
-  background-color: var(--bg-subtle);
-  padding: 0.1rem 0.5rem;
+  background: var(--bg-subtle);
+  padding: 0.15rem 0.5rem;
   border-radius: var(--radius-pill);
   border: var(--hairline);
 }
 
-.toolsBody {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-}
-
+.toolsBody { min-height: 0; overflow-y: auto; }
 .toolsEmpty {
   padding: var(--space-5) var(--space-4);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-xs);
-  color: var(--text-faint);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-  text-align: center;
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
   line-height: var(--line-height-normal);
 }
 
-.environmentForm {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-}
+.environmentForm { display: flex; flex-direction: column; gap: var(--space-3); }
 
-/* ---- Server config block ---- */
 .configBox {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
   font-family: var(--font-mono);
   font-size: var(--font-size-xs);
-  color: var(--text-muted);
-  background-color: var(--bg);
-  border: var(--hairline);
-  border-radius: var(--radius-md);
-  padding: var(--space-3);
-  word-break: break-all;
+  line-height: var(--line-height-normal);
 }
 
 .configRow {
-  display: flex;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: var(--space-4);
   align-items: baseline;
 }
 
-.configKey {
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-wide);
-  color: var(--text-faint);
-  flex: 0 0 5rem;
-}
+.configKey { color: var(--text-faint); }
+.configVal { margin: 0; color: var(--text); overflow-wrap: anywhere; min-width: 0; }
 
-.configVal {
-  color: var(--text);
-  flex: 1 1 auto;
-  min-width: 0;
+@media (max-width: 1100px) {
+  .toolPanels { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 900px) {
-  .page { gap: var(--space-5); }
-  .main { flex-direction: column; }
-  .toolsPanel {
-    flex: 0 0 auto;
-    width: auto;
-    max-height: 22rem;
-    /* En modo apilado reordenamos: tools aparecen debajo de los paneles */
-    order: 2;
-  }
-  .panelsColumn { order: 1; }
+  .main { grid-template-columns: minmax(0, 1fr); }
+  .toolsPanel { position: static; max-height: 18rem; width: 100%; }
+  .toolPanels { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .page, .panelsColumn { gap: var(--space-4); }
+  .headerLeft { gap: var(--space-3); }
+  .connectionState { padding: var(--space-1); }
+  .detailsHint { display: none; }
+  .toolPanels { grid-template-columns: minmax(0, 1fr); }
+  .configRow { grid-template-columns: minmax(0, 1fr); gap: var(--space-1); }
+  .workspaceBadge { display: none; }
 }

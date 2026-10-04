@@ -38,6 +38,18 @@ export function InspectorPage({ selectedServerId, onSelectServer }: Props) {
   const calling = call.isPending && call.variables?.serverId === selectedServerId && call.variables?.toolName === selectedTool;
   const operationsBlocked = migrationPending || !!serversError;
 
+  // Select a usable tool without replacing any existing per-tool draft.
+  useEffect(() => {
+    if (!server || server.status !== 'connected' || server.tools.some((item) => item.name === selectedTool)) return;
+    const first = server.tools[0];
+    if (!first) return;
+    const nextKey = draftKey(server.config.id, first.name);
+    setSelections((previous) => ({ ...previous, [server.config.id]: first.name }));
+    setDrafts((previous) => Object.hasOwn(previous, nextKey) ? previous : {
+      ...previous, [nextKey]: exampleFromSchema(first.inputSchema),
+    });
+  }, [server, selectedTool]);
+
   function selectTool(name: string) {
     if (!server) return;
     const nextKey = draftKey(server.config.id, name);
@@ -62,7 +74,11 @@ export function InspectorPage({ selectedServerId, onSelectServer }: Props) {
       <MigrationNotice pending={migrationPending} />
       <header className={styles.header}>
         <div className={styles.headerLeft}>
-          <ServerSelect servers={servers} selectedId={server.config.id} onSelect={onSelectServer} />
+          <div className={styles.serverIdentity}>
+            <span className={styles.eyebrow}>MCP inspector</span>
+            <ServerSelect servers={servers} selectedId={server.config.id} onSelect={onSelectServer} />
+          </div>
+          <span className={styles.connectionState} data-connected={isConnected}>{server.status}</span>
         </div>
         <div className={styles.actions}>
           {isConnected || connecting ? (
@@ -76,6 +92,10 @@ export function InspectorPage({ selectedServerId, onSelectServer }: Props) {
           )}
         </div>
       </header>
+      <details className={styles.serverDetails}>
+        <summary>Server configuration <span className={styles.detailsHint}>command, environment names and references</span></summary>
+        <ServerConfig server={server} />
+      </details>
       <div className={styles.main}>
         <ToolsPanel tools={server.tools} isConnected={isConnected} selectedTool={selectedTool} onSelectTool={selectTool} />
         <div className={styles.panelsColumn}>
@@ -83,20 +103,25 @@ export function InspectorPage({ selectedServerId, onSelectServer }: Props) {
           <ErrorBanner error={connect.variables === server.config.id ? connect.error?.message : null} onDismiss={connect.reset} />
           <ErrorBanner error={disconnect.variables === server.config.id ? disconnect.error?.message : null} onDismiss={disconnect.reset} />
           <ErrorBanner error={server.status === 'error' ? server.error : null} />
-          <Panel title="Server config" subtitle={`${server.config.transport} · ${server.status}`}
-            actions={<span className="numeric" style={{ fontSize: 'var(--font-size-xs)' }}>{isConnected ? `${server.tools.length} tools loaded` : 'no live tools'}</span>}>
-            <ServerConfig server={server} />
-          </Panel>
           {(server.config.sessionEnvKeys?.length ?? 0) > 0 && (
             <Panel title="Session environment" subtitle="values are held only in backend memory">
               <SessionEnvironment key={server.config.id} server={server} disabled={operationsBlocked || isConnected || connecting || disconnecting} />
             </Panel>
           )}
           {missingEnvironment && <p role="status">Missing environment values: {server.missingEnvKeys?.join(', ')}. Enter session values below or check the backend references before connecting.</p>}
-          <Panel title="Input schema" subtitle={tool ? `tool: ${tool.name}` : isConnected ? 'pick a tool from the tool list' : 'connect to load tools'}>
+          <header className={styles.workspaceHead}>
+            <div>
+              <p className={styles.eyebrow}>{tool ? 'Selected tool' : 'Tool workspace'}</p>
+              <h1 className={styles.toolName}>{tool?.name ?? (isConnected ? 'Choose a tool' : 'Connect to begin')}</h1>
+              <p className={styles.toolDescription}>{tool?.description ?? (isConnected ? 'Select a tool from the list to inspect its inputs and run it.' : 'Connect this server to load its tools, schemas and example arguments.')}</p>
+            </div>
+            {tool && <span className={styles.workspaceBadge}>stdio tool</span>}
+          </header>
+          <div className={styles.toolPanels}>
+          <Panel title="Input schema" subtitle="01 · understand the inputs">
             <SchemaViewer tool={tool} />
           </Panel>
-          <Panel title="Arguments" subtitle={tool ? 'edit JSON manually before running' : 'no tool selected'} actions={
+          <Panel title="Arguments" subtitle={tool ? '02 · edit and run' : 'no tool selected'} actions={
             <Button variant="primary" disabled={operationsBlocked || !isConnected || !tool || !argsValid || calling || disconnecting}
               onClick={() => {
                 if (selectedTool && argsValid && parsedArgs.ok) call.mutate({ serverId: server.config.id, toolName: selectedTool, args: parsedArgs.value });
@@ -105,7 +130,8 @@ export function InspectorPage({ selectedServerId, onSelectServer }: Props) {
             <JsonEditor key={key} schema={tool?.inputSchema} value={argsText}
               onChange={(text) => { if (key) setDrafts((previous) => ({ ...previous, [key]: text })); }} disabled={!tool} />
           </Panel>
-          <Panel title="Execution trace" subtitle={tool ? `${server.config.id} / ${tool.name}` : 'run a tool to populate'}>
+          </div>
+          <Panel title="Execution trace" subtitle={tool ? `03 · result · ${server.config.id} / ${tool.name}` : 'run a tool to populate'}>
             <ExecutionTrace trace={lastTrace} loading={calling}
               error={call.variables?.serverId === server.config.id && call.variables?.toolName === selectedTool ? call.error?.message : null} />
           </Panel>
@@ -149,7 +175,10 @@ function ToolsPanel({ tools, isConnected, selectedTool, onSelectTool }: {
 }) {
   return (
     <aside className={styles.toolsPanel} aria-label="tools">
-      <div className={styles.toolsHead}><span className={styles.toolsTitle}>tools</span><span className={styles.toolsCount}>{tools.length}</span></div>
+      <div className={styles.toolsHead}>
+        <div><h2 className={styles.toolsTitle}>Tools</h2><p className={styles.toolsHint}>Select a tool to work with</p></div>
+        <span className={styles.toolsCount}>{tools.length}</span>
+      </div>
       <div className={styles.toolsBody}>
         {isConnected ? tools.length > 0 ? <ToolList tools={tools} selectedName={selectedTool} onSelect={onSelectTool} /> : <div className={styles.toolsEmpty}>server returned no tools</div>
           : <div className={styles.toolsEmpty}>connect the server<br />to list tools</div>}
@@ -167,7 +196,7 @@ function ServerConfig({ server }: { server: McpServerState }) {
   if (server.config.cwd) rows.push(['cwd', server.config.cwd]);
   if (typeof server.pid === 'number') rows.push(['pid', String(server.pid)]);
   if (server.config.notes) rows.push(['notes', server.config.notes]);
-  return <div className={styles.configBox}>{rows.map(([label, value]) => (
-    <div key={label} className={styles.configRow}><span className={styles.configKey}>{label}</span><span className={styles.configVal}>{value}</span></div>
-  ))}</div>;
+  return <dl className={styles.configBox}>{rows.map(([label, value]) => (
+    <div key={label} className={styles.configRow}><dt className={styles.configKey}>{label}</dt><dd className={styles.configVal}>{value}</dd></div>
+  ))}</dl>;
 }

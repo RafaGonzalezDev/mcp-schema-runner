@@ -32,7 +32,7 @@ export function JsonEditor({ value, schema, onChange, disabled, id, label = 'Too
         onBlur={() => setTouched(true)}
         spellCheck={false}
         disabled={disabled}
-        placeholder='{\n  "path": "./README.md"\n}'
+        placeholder={disabled ? 'Select a tool to edit its arguments.' : '{}'}
         aria-invalid={showError}
         aria-describedby={showError ? `${fieldId}-err` : undefined}
       />

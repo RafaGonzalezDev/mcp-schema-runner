@@ -25,7 +25,7 @@ export function ToolList({ tools, selectedName, onSelect }: Props) {
               aria-pressed={active}
             >
               <div className={styles.head}>
-                <span className={styles.name}>{tool.name}</span>
+                <span className={styles.name} title={tool.name}>{tool.name}</span>
                 <span className={styles.tag}>
                   {required.length > 0 ? `${required.length} required` : 'optional args'}
                 </span>

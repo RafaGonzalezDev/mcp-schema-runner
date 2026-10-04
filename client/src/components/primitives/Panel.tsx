@@ -36,7 +36,7 @@ export function Panel({
         <header className={styles.head}>
           <div className={styles.headBody}>
             {subtitle && <div className={styles.subtitle}>{subtitle}</div>}
-            {title && <div className={styles.title}>{title}</div>}
+            {title && <h2 className={styles.title}>{title}</h2>}
           </div>
           {actions && <div className={styles.headActions}>{actions}</div>}
         </header>

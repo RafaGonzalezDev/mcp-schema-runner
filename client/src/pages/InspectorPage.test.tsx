@@ -44,6 +44,33 @@ beforeEach(() => {
 afterEach(() => { cleanup(); client.clear(); });
 
 describe('InspectorPage', () => {
+  it('selects the first loaded tool and exposes its workspace without making a call', () => {
+    render(page(), { wrapper });
+    expect(screen.getByRole('heading', { level: 1, name: 'echo' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^echo.*optional args/ }).getAttribute('aria-pressed')).toBe('true');
+    expect(editor().value).toBe('{\n  "message": ""\n}');
+    expect(editor().disabled).toBe(false);
+    expect(api.callTool).not.toHaveBeenCalled();
+    const configuration = screen.getByText('Server configuration').closest('details');
+    expect(configuration?.open).toBe(false);
+  });
+
+  it('keeps a selected tool across polling and falls back only when it disappears', async () => {
+    render(page(), { wrapper });
+    await settleInitialFetch();
+    choose('other');
+    fireEvent.change(editor(), { target: { value: '{"draft":"other"}' } });
+    await poll([makeServer()]);
+    expect(screen.getByRole('heading', { level: 1, name: 'other' })).toBeTruthy();
+    expect(editor().value).toBe('{"draft":"other"}');
+    const changed = makeServer();
+    changed.tools = [changed.tools[0]!];
+    await poll([changed]);
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'echo' })).toBeTruthy());
+    expect(editor().value).toBe('{\n  "message": ""\n}');
+    expect(api.callTool).not.toHaveBeenCalled();
+  });
+
   it('keeps separate drafts when changing tools and servers', () => {
     const { rerender } = render(page(), { wrapper });
     choose();
