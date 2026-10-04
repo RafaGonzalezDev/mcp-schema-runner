@@ -70,7 +70,8 @@
   z-index: var(--z-overlay);
   top: calc(100% + var(--space-2));
   left: 0;
-  min-width: 20rem;
+  min-width: min(20rem, calc(100vw - var(--inline-padding) * 2));
+  max-width: calc(100vw - var(--inline-padding) * 2);
   display: block;
   padding: var(--space-1);
   background-color: color-mix(in srgb, var(--bg-elevated) 96%, black 4%);

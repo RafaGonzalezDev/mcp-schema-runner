@@ -125,3 +125,10 @@
   .nav { gap: var(--space-3); }
   .brandName { font-size: var(--font-size-lg); }
 }
+
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; }
+  .brandLink { max-width: 100%; }
+  .brandSep, .brandSuffix { display: none; }
+  .right { margin-left: auto; }
+}
