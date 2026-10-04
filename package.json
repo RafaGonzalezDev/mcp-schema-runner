@@ -2,15 +2,18 @@
   "name": "mcp-schema-runner",
   "version": "0.1.0",
   "private": true,
-  "description": "Local developer tool for debugging stdio MCP servers by inspecting tool schemas and executing manual tool calls.",
+  "description": "Local developer tool for inspecting stdio MCP tool schemas and executing manual calls.",
   "type": "module",
+  "engines": { "node": "^20.19.0 || >=22.12.0" },
   "scripts": {
     "dev": "node scripts/dev.mjs",
+    "start": "npm --prefix server start",
     "install:all": "npm install && npm --prefix server install && npm --prefix client install",
-    "test": "npm --prefix server test && npm --prefix client test",
-    "build": "npm --prefix server run build && npm --prefix client run build"
-  },
-  "devDependencies": {
-    "concurrently": "^9.1.2"
+    "install:ci": "npm ci && npm --prefix server ci && npm --prefix client ci",
+    "typecheck": "npm --prefix server run typecheck && npm --prefix client run typecheck",
+    "test": "npm --prefix server test && npm --prefix client test && node --test scripts/processes.test.mjs",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:dev": "node scripts/dev-smoke.mjs"
   }
 }
