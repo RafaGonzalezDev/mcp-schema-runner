@@ -1,3 +1,11 @@
+## 2026-10-04 — Clarify the Home and Inspector workflows
+
+**What**: Reorganize the interface around choosing a server, selecting a tool, understanding its schema, editing arguments and reading the result. Keep server configuration available through native disclosure rather than displacing the execution workspace, highlight selection, and preserve tools-first order on small screens.
+
+**Where**: [Home](<../../client/src/pages/HomePage.tsx>), [Inspector](<../../client/src/pages/InspectorPage.tsx>), [tool list](<../../client/src/components/tools/ToolList.tsx>) and [JSON editor](<../../client/src/components/traces/JsonEditor.tsx>).
+
+**Why**: Separate setup information from execution controls, improve initial discoverability, prevent broken configuration labels and keep the flow coherent on desktop and mobile. Selecting the first available tool does not launch a process or execute a tool.
+
 ## 2026-10-04 — Harden the local runner
 
 **What**: Replace unused client-specific adapters with one validated canonical stdio contract; introduce session-only environment values, persistent references, explicit legacy migration and atomic metadata writes. Protect the loopback API with Host/Origin checks and per-start Bearer authentication.
