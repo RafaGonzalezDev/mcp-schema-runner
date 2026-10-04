@@ -1,171 +1,101 @@
-/**
- * Rutas HTTP de la API local.
- *
- * Endpoints del MVP (ver `plan.md`):
- *   GET    /api/health
- *   GET    /api/servers
- *   POST   /api/servers
- *   DELETE /api/servers/:id
- *   POST   /api/servers/:id/connect
- *   POST   /api/servers/:id/disconnect
- *   GET    /api/servers/:id/tools
- *   POST   /api/servers/:id/tools/:toolName/call
- *
- * Las respuestas de error usan `ApiError` para que la UI pueda
- * mostrarlas de forma consistente.
- */
-
-import { Router, type Request, type Response, type NextFunction } from 'express';
-import { McpManager } from '../mcp/manager.js';
+import { Router, type Request, type RequestHandler } from 'express';
+import { McpManager, McpOperationError } from '../mcp/manager.js';
 import type { ConfigStore } from '../storage/configStore.js';
-import { isValidMcpServerConfig, type ApiError, type McpServerConfig } from '../../../shared/types.js';
+import { isRecord, isStringRecord, isValidAddServerConfig, type McpServerConfig } from '../../../shared/types.js';
+export type ApiDependencies = { manager: McpManager; store: ConfigStore; fixtures: McpServerConfig[] };
+const asyncRoute = (fn: (req: Request, res: Parameters<RequestHandler>[1]) => Promise<void>): RequestHandler => (req, res, next) => { void fn(req, res).catch(next); };
 
-type Deps = {
-  manager: McpManager;
-  store: ConfigStore;
-  /** Fuentes de fixtures que se incluyen al iniciar (built-in). */
-  fixtures: McpServerConfig[];
-};
-
-function notFound(message: string): ApiError {
-  return { error: message, code: 'NOT_FOUND' };
-}
-
-function badRequest(message: string, detail?: string): ApiError {
-  return { error: message, detail, code: 'BAD_REQUEST' };
-}
-
-function internal(message: string, detail?: string): ApiError {
-  return { error: message, detail, code: 'INTERNAL' };
-}
-
-/** Fusiona fixtures y servidores guardados, deduplicando por `id`. */
-function mergedServers(deps: Deps): McpServerConfig[] {
-  const stored = deps.store.list();
-  const map = new Map<string, McpServerConfig>();
-  for (const f of deps.fixtures) map.set(f.id, f);
-  for (const s of stored) map.set(s.id, s); // stored pisa fixtures
-  return [...map.values()];
-}
-
-export function createApiRouter(deps: Deps): Router {
+export function createApiRouter(deps: ApiDependencies): Router {
   const router = Router();
-
-  router.get('/health', (_req, res) => {
-    res.json({ status: 'ok', service: 'mcp-schema-runner', timestamp: new Date().toISOString() });
-  });
-
-  router.get('/servers', (_req, res) => {
-    const configs = mergedServers(deps);
-    res.json({ servers: deps.manager.listStates(configs) });
-  });
-
-  router.post('/servers', (req, res) => {
-    const body = req.body as { config?: unknown };
-    if (!isValidMcpServerConfig(body?.config)) {
-      res.status(400).json(badRequest('invalid McpServerConfig'));
-      return;
+  const deleting = new Set<string>();
+  const configs = () => {
+    const all = [...deps.fixtures, ...deps.store.list()];
+    const ids = new Set<string>();
+    for (const config of all) {
+      if (ids.has(config.id)) throw new McpOperationError('Stored server id conflicts with a built-in fixture', 'STORE_INVALID');
+      ids.add(config.id);
     }
-    const added = deps.store.add(body.config);
-    res.status(201).json({ server: deps.manager.getState(added) });
-  });
-
-  router.delete('/servers/:id', (req, res) => {
+    return all;
+  };
+  const builtin = (id: string) => deps.fixtures.some((item) => item.id === id);
+  const idOf = (req: Request): string => {
     const id = req.params.id;
-    if (typeof id !== 'string') {
-      res.status(400).json(badRequest('missing id'));
-      return;
-    }
-    const removed = deps.store.remove(id);
-    if (!removed) {
-      res.status(404).json(notFound(`server '${id}' not found in store`));
-      return;
-    }
-    void deps.manager.disconnect(id);
+    if (typeof id !== 'string') throw new McpOperationError('Missing server id', 'BAD_REQUEST');
+    return id;
+  };
+  const find = (id: string): McpServerConfig => {
+    if (deleting.has(id)) throw new McpOperationError('Server is being removed', 'BUSY');
+    const config = configs().find((item) => item.id === id);
+    if (!config) throw new McpOperationError('Server is not configured', 'NOT_FOUND');
+    return config;
+  };
+  const mutable = () => {
+    if (deps.store.needsMigration()) throw new McpOperationError('Confirm the configuration migration before continuing', 'MIGRATION_REQUIRED');
+  };
+  const state = (config: McpServerConfig) => ({ ...deps.manager.getState(config), builtin: builtin(config.id) });
+  router.get('/servers', (_req, res) => {
+    const all = configs();
+    res.json({ servers: all.map(state), migrationPending: deps.store.needsMigration() });
+  });
+  router.post('/servers', (req, res) => {
+    mutable();
+    if (!isRecord(req.body) || Object.keys(req.body).some((key) => key !== 'config') || !isValidAddServerConfig(req.body.config, process.platform === 'win32')) throw new McpOperationError('Invalid canonical stdio configuration', 'BAD_REQUEST');
+    const config = req.body.config;
+    if (configs().some((item) => item.id === config.id.trim())) throw new McpOperationError('Server id already exists or is reserved', 'CONFLICT');
+    const added = deps.store.add({ ...config, id: config.id.trim(), name: config.name.trim(), command: config.command.trim() });
+    res.status(201).json({ server: state(added) });
+  });
+  router.post('/config/migrate', (_req, res) => {
+    deps.store.migrate();
     res.status(204).end();
   });
-
-  router.post('/servers/:id/connect', async (req, res, next) => {
-    try {
-      const id = req.params.id;
-      if (typeof id !== 'string') {
-        res.status(400).json(badRequest('missing id'));
-        return;
-      }
-      const config = mergedServers(deps).find((s) => s.id === id);
-      if (!config) {
-        res.status(404).json(notFound(`server '${id}' not configured`));
-        return;
-      }
-      const state = await deps.manager.connect(config);
-      res.json({ server: state });
-    } catch (err) {
-      next(err);
-    }
+  router.post('/servers/:id/environment', (req, res) => {
+    mutable();
+    const id = idOf(req);
+    find(id);
+    if (builtin(id)) throw new McpOperationError('Built-in fixtures cannot be edited', 'BUILTIN_SERVER');
+    if (deps.manager.isBusy(id)) throw new McpOperationError('Disconnect before replacing session environment', 'BUSY');
+    if (!isRecord(req.body) || Object.keys(req.body).some((key) => key !== 'env') || !isStringRecord(req.body.env)) throw new McpOperationError('Provide an environment object', 'BAD_REQUEST');
+    res.json({ server: state(deps.store.setSessionEnvironment(id, req.body.env)) });
   });
-
-  router.post('/servers/:id/disconnect', async (req, res, next) => {
+  router.delete('/servers/:id', asyncRoute(async (req, res) => {
+    mutable();
+    const id = idOf(req);
+    find(id);
+    if (builtin(id)) throw new McpOperationError('Built-in fixtures cannot be removed', 'BUILTIN_SERVER');
+    deleting.add(id);
     try {
-      const id = req.params.id;
-      if (typeof id !== 'string') {
-        res.status(400).json(badRequest('missing id'));
-        return;
-      }
       await deps.manager.disconnect(id);
+      if (!deps.store.remove(id)) throw new McpOperationError('Server is not configured', 'NOT_FOUND');
       res.status(204).end();
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  router.get('/servers/:id/tools', async (req, res, next) => {
-    try {
-      const id = req.params.id;
-      if (typeof id !== 'string') {
-        res.status(400).json(badRequest('missing id'));
-        return;
-      }
-      // Refrescamos el listado para mantener paridad con el servidor.
-      const tools = await deps.manager.listTools(id);
-      res.json({ tools });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  router.post('/servers/:id/tools/:toolName/call', async (req, res, next) => {
-    try {
-      const { id, toolName } = req.params;
-      if (typeof id !== 'string' || typeof toolName !== 'string') {
-        res.status(400).json(badRequest('missing id or toolName'));
-        return;
-      }
-      const config = mergedServers(deps).find((s) => s.id === id);
-      if (!config) {
-        res.status(404).json(notFound(`server '${id}' not configured`));
-        return;
-      }
-      const args = (req.body as { arguments?: unknown })?.arguments;
-      const trace = await deps.manager.callTool(config, toolName, args);
-      res.json({ trace });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  // Manejador de errores específico del router.
-  router.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
-    const message = err instanceof Error ? err.message : String(err);
-    const code =
-      err && typeof err === 'object' && 'code' in err
-        ? String((err as { code: unknown }).code)
-        : undefined;
-    if (code === 'NOT_CONNECTED') {
-      res.status(409).json({ error: message, code });
-      return;
-    }
-    res.status(500).json(internal('api error', message));
-  });
-
+    } finally { deleting.delete(id); }
+  }));
+  router.post('/servers/:id/connect', asyncRoute(async (req, res) => {
+    mutable();
+    const config = find(idOf(req));
+    await deps.manager.connect(config);
+    res.json({ server: state(config) });
+  }));
+  router.post('/servers/:id/disconnect', asyncRoute(async (req, res) => {
+    const id = idOf(req);
+    find(id);
+    await deps.manager.disconnect(id);
+    res.status(204).end();
+  }));
+  router.get('/servers/:id/tools', asyncRoute(async (req, res) => {
+    mutable();
+    const id = idOf(req);
+    find(id);
+    res.json({ tools: await deps.manager.listTools(id) });
+  }));
+  router.post('/servers/:id/tools/:toolName/call', asyncRoute(async (req, res) => {
+    mutable();
+    const config = find(idOf(req));
+    const toolName = req.params.toolName;
+    if (typeof toolName !== 'string' || !toolName) throw new McpOperationError('Missing tool name', 'BAD_REQUEST');
+    if (req.body !== undefined && (!isRecord(req.body) || Object.keys(req.body).some((key) => key !== 'arguments'))) throw new McpOperationError('Provide a tool call object', 'BAD_REQUEST');
+    const args: unknown = req.body && Object.hasOwn(req.body, 'arguments') ? req.body.arguments : {};
+    res.json({ trace: await deps.manager.callTool(config, toolName, args) });
+  }));
   return router;
 }

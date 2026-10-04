@@ -1,78 +1,37 @@
-/**
- * Punto de entrada del servidor HTTP.
- *
- * Estructura:
- *   - express + cors
- *   - router de la API (`/api/*`)
- *   - cierre limpio en SIGINT/SIGTERM
- *
- * No hay base de datos ni autenticación en el MVP.
- */
-
-import express from 'express';
-import cors from 'cors';
+import { existsSync } from 'node:fs';
+import { createApp } from './app.js';
 import { McpManager } from './mcp/manager.js';
 import { ConfigStore } from './storage/configStore.js';
-import { createApiRouter } from './api/routes.js';
-import { serverBuiltinFixtures as builtinFixtures } from './config/fixtures.js';
+import { serverBuiltinFixtures } from './config/fixtures.js';
+import { defaultConfigPath, projectPath } from './config/projectPaths.js';
 
-const PORT = Number(process.env.PORT ?? 3001);
-
-const app = express();
-
-// Middleware
-app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '256kb' }));
-
-// Log compacto de peticiones.
-app.use((req, _res, next) => {
-  const t = new Date().toISOString().slice(11, 19);
-  console.log(`[${t}] ${req.method} ${req.path}`);
-  next();
-});
-
-// Dependencias
-const store = new ConfigStore({
-  filePath: process.env.MCP_CONFIG_PATH ?? './.data/servers.json',
-});
-const manager = new McpManager();
-
-app.use('/api', createApiRouter({ manager, store, fixtures: builtinFixtures }));
-
-// 404 para rutas /api/* desconocidas
-app.use('/api', (_req, res) => {
-  res.status(404).json({ error: 'route not found', code: 'NOT_FOUND' });
-});
-
-// Manejador de errores central.
-app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  if (err && typeof err === 'object' && 'type' in err && (err as { type?: string }).type === 'entity.parse.failed') {
-    res.status(400).json({ error: 'invalid JSON body', code: 'BAD_REQUEST' });
-    return;
-  }
-  console.error('[error]', err);
-  const message = err instanceof Error ? err.message : String(err);
-  res.status(500).json({ error: 'internal server error', detail: message });
-});
-
-const server = app.listen(PORT, () => {
-  console.log(`mcp-schema-runner server listening on http://localhost:${PORT}`);
-  console.log(`   GET    /api/health`);
-  console.log(`   GET    /api/servers`);
-  console.log(`   POST   /api/servers`);
-  console.log(`   DELETE /api/servers/:id`);
-  console.log(`   POST   /api/servers/:id/connect`);
-  console.log(`   POST   /api/servers/:id/disconnect`);
-  console.log(`   GET    /api/servers/:id/tools`);
-  console.log(`   POST   /api/servers/:id/tools/:toolName/call`);
-});
-
-async function shutdown(signal: string): Promise<void> {
-  console.log(`[${signal}] shutting down...`);
-  await manager.disconnectAll();
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(1), 5000).unref();
+function integerSetting(name: string, fallback: number, min: number, max: number): number {
+  const raw = process.env[name];
+  const value = raw === undefined ? fallback : Number(raw);
+  if ((raw !== undefined && !/^\d+$/.test(raw)) || !Number.isInteger(value) || value < min || value > max) throw new Error(`Invalid ${name}: expected an integer between ${min} and ${max}`);
+  return value;
 }
-
-process.on('SIGINT', () => void shutdown('SIGINT'));
-process.on('SIGTERM', () => void shutdown('SIGTERM'));
+const port = integerSetting('PORT', 3001, 1, 65535);
+const frontendPort = integerSetting('FRONTEND_PORT', 5173, 1, 65535);
+const manager = new McpManager({ timeoutMs: integerSetting('MCP_REQUEST_TIMEOUT_MS', 30_000, 1, 600_000) });
+const store = new ConfigStore({ filePath: process.env.MCP_CONFIG_PATH ? projectPath(process.env.MCP_CONFIG_PATH) : defaultConfigPath() });
+const clientDirectory = projectPath('client/dist');
+let stopping = false;
+const app = createApp({ port, frontendPort, manager, store, fixtures: serverBuiltinFixtures,
+  clientDirectory: existsSync(projectPath('client/dist/index.html')) ? clientDirectory : undefined,
+  isStopping: () => stopping,
+});
+const server = app.listen(port, '127.0.0.1', () => console.log(`mcp-schema-runner listening on http://127.0.0.1:${port}`));
+server.on('error', () => { console.error('Unable to listen on the configured loopback port'); process.exitCode = 1; });
+async function shutdown(): Promise<void> {
+  if (stopping) return;
+  stopping = true;
+  const deadline = setTimeout(() => { console.error('Shutdown deadline exceeded'); process.exit(1); }, 5000);
+  const httpClosed = new Promise<void>((resolve) => server.close(() => resolve()));
+  server.closeIdleConnections();
+  await Promise.all([httpClosed, manager.disconnectAll()]);
+  clearTimeout(deadline);
+  process.exitCode = 0;
+}
+process.on('SIGINT', () => void shutdown());
+process.on('SIGTERM', () => void shutdown());
