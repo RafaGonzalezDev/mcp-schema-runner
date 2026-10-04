@@ -1,115 +1,83 @@
-/**
- * Tipos compartidos entre cliente y servidor.
- *
- * El cliente solo debe consumir este módulo a través de la API HTTP; los
- * tipos aquí son el contrato. Mantenerlos sincronizados con la
- * implementación del servidor en `server/src/api/`.
- */
-
-// --- Server configuration ---------------------------------------------------
-
-/**
- * Configuración normalizada de un servidor MCP.
- *
- * El MVP solo soporta transporte `stdio`. Futuras iteraciones podrán
- * extender la unión para incluir `sse`, `http`, etc.
- */
+/** Canonical stdio configuration. Literal env values are session-only. */
 export type McpServerConfig = {
-  /** Identificador único, estable, usado por la UI y la API. */
   id: string;
-  /** Nombre legible mostrado en la UI. */
   name: string;
-  /** Transporte. En el MVP solo se soporta `stdio`. */
   transport: 'stdio';
-  /** Comando ejecutable (ej. `npx`, `node`, `python`). */
   command: string;
-  /** Argumentos del comando. */
   args: string[];
-  /** Variables de entorno adicionales (opcional). */
   env?: Record<string, string>;
-  /** Directorio de trabajo (opcional). */
+  envRefs?: Record<string, string>;
+  /** Names only; persisted so a restart can request missing session values. */
+  sessionEnvKeys?: string[];
   cwd?: string;
-  /** Origen de la configuración, para mostrarla en la UI. */
-  source?: 'inline' | 'file' | 'opencode' | 'hermes';
-  /** Notas opcionales. */
+  source?: 'inline' | 'file';
   notes?: string;
 };
 
-// --- Server state (runtime) -------------------------------------------------
-
-export type McpConnectionStatus =
-  | 'disconnected'
-  | 'connecting'
-  | 'connected'
-  | 'error';
-
+export type AddServerConfig = Omit<McpServerConfig, 'sessionEnvKeys'>;
+export type PublicServerConfig = Omit<McpServerConfig, 'env'>;
+export type McpConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type McpServerState = {
-  config: McpServerConfig;
+  config: PublicServerConfig;
   status: McpConnectionStatus;
-  /** Mensaje de error si `status === 'error'`. */
   error?: string;
-  /** Tools conocidas tras un `tools/list` exitoso. */
   tools: McpToolSummary[];
-  /** PID del proceso si está conectado. */
   pid?: number;
+  builtin?: boolean;
+  missingEnvKeys?: string[];
 };
-
-export type McpToolSummary = {
-  name: string;
-  description?: string;
-  /** `inputSchema` tal como lo devuelve el servidor. */
-  inputSchema: unknown;
-};
-
-// --- Execution trace --------------------------------------------------------
-
+export type ServersResponse = { servers: McpServerState[]; migrationPending: boolean };
+export type McpToolSummary = { name: string; description?: string; inputSchema: unknown };
 export type ToolExecutionStatus = 'success' | 'error';
-
 export type ToolExecutionTrace = {
   serverId: string;
   toolName: string;
-  /** Argumentos enviados al servidor. */
-  request: unknown;
-  /** Resultado si la tool devolvió contenido. */
+  /** Exactly the argument object passed to the SDK, not a JSON-RPC envelope. */
+  request: Record<string, unknown>;
   response?: unknown;
-  /** Detalle de error si la ejecución falló. */
-  error?: {
-    message: string;
-    name?: string;
-    stack?: string;
-    code?: string | number;
-    raw?: unknown;
-  };
+  error?: { message: string; name?: string; stack?: string; code?: string | number; raw?: unknown };
   durationMs: number;
   status: ToolExecutionStatus;
   timestamp: string;
 };
+export type ApiError = { error: string; detail?: string; code?: string };
 
-// --- API error shape --------------------------------------------------------
-
-export type ApiError = {
-  error: string;
-  detail?: string;
-  code?: string;
-};
-
-// --- Validation helpers -----------------------------------------------------
-
-export function isValidMcpServerConfig(value: unknown): value is McpServerConfig {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  if (typeof v.id !== 'string' || v.id.length === 0) return false;
-  if (typeof v.name !== 'string' || v.name.length === 0) return false;
-  if (v.transport !== 'stdio') return false;
-  if (typeof v.command !== 'string' || v.command.length === 0) return false;
-  if (!Array.isArray(v.args)) return false;
-  if (!v.args.every((a) => typeof a === 'string')) return false;
-  if (v.env !== undefined) {
-    if (typeof v.env !== 'object' || v.env === null) return false;
-    if (!Object.values(v.env as Record<string, unknown>).every((x) => typeof x === 'string')) {
-      return false;
-    }
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const proto: unknown = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+export function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.entries(value).every(([key, val]) =>
+    /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) && typeof val === 'string' && !val.includes('\0'));
+}
+const fields = new Set(['id', 'name', 'transport', 'command', 'args', 'env', 'envRefs', 'sessionEnvKeys', 'cwd', 'source', 'notes']);
+export function isValidMcpServerConfig(value: unknown, caseInsensitiveEnvironment = false): value is McpServerConfig {
+  if (!isRecord(value) || Object.keys(value).some((key) => !fields.has(key))) return false;
+  for (const key of ['id', 'name', 'command']) {
+    const text = value[key];
+    if (typeof text !== 'string' || !text.trim() || /[\u0000-\u001f]/.test(text)) return false;
   }
-  if (v.cwd !== undefined && typeof v.cwd !== 'string') return false;
-  return true;
+  if (value.transport !== 'stdio' || !Array.isArray(value.args) || !value.args.every((arg) => typeof arg === 'string' && !arg.includes('\0'))) return false;
+  if (value.env !== undefined && !isStringRecord(value.env)) return false;
+  if (value.envRefs !== undefined && (!isStringRecord(value.envRefs) || !Object.values(value.envRefs).every((ref) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(ref)))) return false;
+  if (value.sessionEnvKeys !== undefined && (!Array.isArray(value.sessionEnvKeys) || !value.sessionEnvKeys.every((key) => typeof key === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) || new Set(value.sessionEnvKeys).size !== value.sessionEnvKeys.length)) return false;
+  if (value.cwd !== undefined && (typeof value.cwd !== 'string' || !value.cwd.trim() || value.cwd.includes('\0'))) return false;
+  if (value.notes !== undefined && typeof value.notes !== 'string') return false;
+  if (value.source !== undefined && value.source !== 'inline' && value.source !== 'file') return false;
+  const canonical = (key: string) => caseInsensitiveEnvironment ? key.toUpperCase() : key;
+  const refNames = Object.keys((value.envRefs ?? {}) as Record<string, string>);
+  const envNames = Object.keys((value.env ?? {}) as Record<string, string>);
+  const requiredNames = (value.sessionEnvKeys as string[] | undefined) ?? [];
+  for (const keys of [refNames, envNames, requiredNames]) if (new Set(keys.map(canonical)).size !== keys.length) return false;
+  const refs = new Set(refNames.map(canonical));
+  const session = new Set([...requiredNames, ...envNames]);
+  return ![...session].some((key) => refs.has(canonical(key))) && !envNames.some((key) => requiredNames.some((other) => key !== other && canonical(key) === canonical(other)));
+}
+export function isValidAddServerConfig(value: unknown, caseInsensitiveEnvironment = false): value is AddServerConfig {
+  return isValidMcpServerConfig(value, caseInsensitiveEnvironment) && !Object.hasOwn(value, 'sessionEnvKeys');
+}
+export function publicConfig(config: McpServerConfig): PublicServerConfig {
+  const { env: _env, ...rest } = config;
+  return { ...rest, sessionEnvKeys: config.sessionEnvKeys ?? Object.keys(config.env ?? {}) };
 }
