@@ -1,8 +1,11 @@
-# Local docs (plan, handoff) — session artifacts, not for the repo
-docs/
+# Local session artifacts; public documentation is versioned
+docs/local/
+docs/plan.md
+docs/handoff.md
 
 # Server runtime data (persisted user-added servers)
-server/.data/
+.data/
+*.store-tmp
 
 # Dependencies
 node_modules/
