@@ -1,269 +1,227 @@
-/**
- * MCP client core.
- *
- * Encapsula el ciclo de vida de un cliente MCP:
- *   - spawn del proceso stdio
- *   - handshake `initialize`
- *   - `tools/list`
- *   - `tools/call`
- *   - cierre limpio
- *
- * Es responsabilidad del `McpManager` mantener el estado en memoria y
- * exponer operaciones de alto nivel. La capa HTTP en `api/` consume
- * este manager; no hay acceso directo desde la UI.
- *
- * Decisiones:
- *   - Una conexión activa por `serverId`. Reconectar cierra la anterior.
- *   - Errores de transporte se traducen a mensajes estables para la UI.
- *   - Duración medida en `tools/call` para el `ExecutionTrace`.
- */
-
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import type {
-  McpServerConfig,
-  McpServerState,
-  McpToolSummary,
-  ToolExecutionTrace,
-} from '../../../shared/types.js';
+import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
+import { isRecord, publicConfig, type McpServerConfig, type McpServerState, type McpToolSummary, type ToolExecutionTrace } from '../../../shared/types.js';
+import { withAbsolutePaths } from '../config/expandPaths.js';
 
+export class McpOperationError extends Error {
+  constructor(message: string, public readonly code: string) { super(message); this.name = 'McpOperationError'; }
+}
+type ManagedClient = Pick<Client, 'connect' | 'close' | 'listTools' | 'callTool'> & {
+  onclose?: () => void;
+  onerror?: (error: Error) => void;
+};
+type ManagedTransport = Transport & { readonly pid?: number | null };
+export type McpManagerOptions = {
+  timeoutMs?: number;
+  environment?: NodeJS.ProcessEnv;
+  platform?: NodeJS.Platform;
+  createClient?: () => ManagedClient;
+  createTransport?: (config: McpServerConfig) => ManagedTransport;
+};
 type Connection = {
-  client: Client;
-  transport: StdioClientTransport;
+  status: McpServerState['status'];
   tools: McpToolSummary[];
+  abort: AbortController;
+  client?: ManagedClient;
+  transport?: ManagedTransport;
+  operation?: Promise<void>;
+  closing?: Promise<void>;
+  error?: string;
   pid?: number;
+  intentionalClose?: boolean;
 };
 
+/** Owns pending and established connections, including cancellation and cleanup. */
 export class McpManager {
   private readonly connections = new Map<string, Connection>();
-
-  /** Lista todos los servidores conocidos y su estado actual. */
-  listStates(configs: McpServerConfig[]): McpServerState[] {
-    return configs.map((config) => this.toState(config));
+  private stopping = false;
+  private readonly timeoutMs: number;
+  private readonly environment: NodeJS.ProcessEnv;
+  constructor(private readonly options: McpManagerOptions = {}) {
+    this.timeoutMs = options.timeoutMs ?? 30_000;
+    if (!Number.isInteger(this.timeoutMs) || this.timeoutMs < 1 || this.timeoutMs > 600_000) throw new Error('Invalid MCP request timeout');
+    this.environment = options.environment ?? process.env;
   }
 
-  /** Estado de un servidor concreto, o `null` si no está configurado. */
+  private environmentValue(ref: string): string | undefined {
+    if ((this.options.platform ?? process.platform) !== 'win32') return this.environment[ref];
+    // Model Windows lookup for injected plain objects as well as process.env.
+    const key = Object.keys(this.environment).sort().find((name) =>
+      name.toUpperCase() === ref.toUpperCase() && this.environment[name] !== undefined);
+    return key === undefined ? undefined : this.environment[key];
+  }
+
+  missingEnvironment(config: McpServerConfig): string[] {
+    const missing = (config.sessionEnvKeys ?? Object.keys(config.env ?? {})).filter((key) => !Object.hasOwn(config.env ?? {}, key));
+    for (const [key, ref] of Object.entries(config.envRefs ?? {})) {
+      if (this.environmentValue(ref) === undefined) missing.push(key);
+    }
+    return [...new Set(missing)];
+  }
+  private explicitEnvironment(config: McpServerConfig): Record<string, string> {
+    const missing = this.missingEnvironment(config);
+    if (missing.length) throw new McpOperationError(`Provide environment values for: ${missing.join(', ')}`, 'ENV_REQUIRED');
+    const sessionKeys = config.sessionEnvKeys ?? Object.keys(config.env ?? {});
+    const names = [...new Set(sessionKeys), ...Object.keys(config.envRefs ?? {})];
+    const normalized = names.map((key) => (this.options.platform ?? process.platform) === 'win32' ? key.toUpperCase() : key);
+    if (new Set(normalized).size !== names.length) throw new McpOperationError('Environment variable names overlap', 'BAD_REQUEST');
+    const refs = Object.fromEntries(Object.entries(config.envRefs ?? {}).map(([key, ref]) => [key, this.environmentValue(ref)!]));
+    const explicit = { ...refs, ...config.env };
+    if (Object.values(explicit).some((value) => value.includes('\0'))) {
+      throw new McpOperationError('Environment values cannot contain NUL characters', 'BAD_REQUEST');
+    }
+    // Match the SDK's uppercase default keys so explicit Windows overrides win.
+    return (this.options.platform ?? process.platform) === 'win32'
+      ? Object.fromEntries(Object.entries(explicit).map(([key, value]) => [key.toUpperCase(), value]))
+      : explicit;
+  }
+  listStates(configs: McpServerConfig[]): McpServerState[] { return configs.map((config) => this.getState(config)); }
   getState(config: McpServerConfig): McpServerState {
-    return this.toState(config);
-  }
-
-  /**
-   * Inicia conexión con un servidor: spawn, initialize y tools/list.
-   * Si ya estaba conectado, lo desconecta primero.
-   */
-  async connect(config: McpServerConfig): Promise<McpServerState> {
-    if (config.transport !== 'stdio') {
-      throw new Error(`unsupported transport: ${String(config.transport)}`);
-    }
-    await this.disconnect(config.id);
-
-    const transport = new StdioClientTransport({
-      command: config.command,
-      args: config.args,
-      env: this.buildEnv(config.env),
-      cwd: config.cwd,
-    });
-
-    const client = new Client(
-      { name: 'mcp-schema-runner', version: '0.1.0' },
-      { capabilities: {} },
-    );
-
-    try {
-      await client.connect(transport);
-    } catch (err) {
-      // Si el handshake falla, intentamos cerrar el transporte.
-      try {
-        await transport.close();
-      } catch {
-        // Ignorar errores secundarios al cerrar.
-      }
-      throw new Error(this.describeError(err, 'failed to connect'));
-    }
-
-    const pid = transport.pid ?? undefined;
-    this.connections.set(config.id, { client, transport, tools: [], pid });
-
-    try {
-      const tools = await this.listTools(config.id);
-      this.updateTools(config.id, tools);
-    } catch (err) {
-      // Si el listado falla, mantenemos la conexión pero marcamos
-      // estado de error operacional. La UI puede reintentar.
-      this.updateTools(config.id, []);
-      throw new Error(this.describeError(err, 'connected but tools/list failed'));
-    }
-
-    return this.toState(config);
-  }
-
-  /** Cierra la conexión de un servidor, si existe. */
-  async disconnect(serverId: string): Promise<void> {
-    const conn = this.connections.get(serverId);
-    if (!conn) return;
-    this.connections.delete(serverId);
-    try {
-      await conn.client.close();
-    } catch {
-      // El cliente puede haber sido cerrado por un crash de proceso;
-      // cerramos el transporte en cualquier caso.
-    }
-    try {
-      await conn.transport.close();
-    } catch {
-      // Idem.
-    }
-  }
-
-  /** Cierra todas las conexiones activas. Llamado en `shutdown`. */
-  async disconnectAll(): Promise<void> {
-    const ids = [...this.connections.keys()];
-    await Promise.allSettled(ids.map((id) => this.disconnect(id)));
-  }
-
-  /** Lista tools via `tools/list` y devuelve el resultado sin persistir. */
-  async listTools(serverId: string): Promise<McpToolSummary[]> {
-    const conn = this.requireConnection(serverId);
-    const result = await conn.client.listTools();
-    return result.tools.map((t) => ({
-      name: t.name,
-      description: t.description,
-      inputSchema: t.inputSchema,
-    }));
-  }
-
-  /** Ejecuta una tool via `tools/call` y devuelve una traza normalizada. */
-  async callTool(
-    config: McpServerConfig,
-    toolName: string,
-    args: unknown,
-  ): Promise<ToolExecutionTrace> {
-    const conn = this.requireConnection(config.id);
-    const timestamp = new Date().toISOString();
-    const start = performance.now();
-
-    try {
-      const result = await conn.client.callTool({
-        name: toolName,
-        arguments: this.coerceArgs(args),
-      });
-      const durationMs = Math.round(performance.now() - start);
-
-      // `isError` es la señal oficial de error a nivel de tool.
-      if (result.isError) {
-        return {
-          serverId: config.id,
-          toolName,
-          request: args,
-          error: {
-            message: this.extractErrorMessage(result.content),
-            raw: result,
-          },
-          durationMs,
-          status: 'error',
-          timestamp,
-        };
-      }
-
-      return {
-        serverId: config.id,
-        toolName,
-        request: args,
-        response: result,
-        durationMs,
-        status: 'success',
-        timestamp,
-      };
-    } catch (err) {
-      const durationMs = Math.round(performance.now() - start);
-      return {
-        serverId: config.id,
-        toolName,
-        request: args,
-        error: {
-          message: this.describeError(err, 'tool execution failed'),
-          name: err instanceof Error ? err.name : undefined,
-          stack: err instanceof Error ? err.stack : undefined,
-          code:
-            err && typeof err === 'object' && 'code' in err
-              ? String((err as { code: unknown }).code)
-              : undefined,
-          raw: err,
-        },
-        durationMs,
-        status: 'error',
-        timestamp,
-      };
-    }
-  }
-
-  // -----------------------------------------------------------------------
-  // Internals
-  // -----------------------------------------------------------------------
-
-  private toState(config: McpServerConfig): McpServerState {
     const conn = this.connections.get(config.id);
-    if (!conn) {
-      return { config, status: 'disconnected', tools: [] };
-    }
     return {
-      config,
-      status: 'connected',
-      tools: conn.tools,
-      pid: conn.pid,
+      config: publicConfig(config), status: conn?.status ?? 'disconnected',
+      tools: conn?.tools ?? [], error: conn?.error, pid: conn?.pid,
+      missingEnvKeys: this.missingEnvironment(config),
     };
   }
+  isBusy(id: string): boolean {
+    const conn = this.connections.get(id);
+    return !!conn && (!!conn.closing || conn.status === 'connected' || conn.status === 'connecting');
+  }
 
-  private requireConnection(serverId: string): Connection {
-    const conn = this.connections.get(serverId);
-    if (!conn) {
-      const err = new Error(`server '${serverId}' is not connected`);
-      (err as Error & { code?: string }).code = 'NOT_CONNECTED';
-      throw err;
+  async connect(config: McpServerConfig): Promise<McpServerState> {
+    if (this.stopping) throw new McpOperationError('Runner is shutting down', 'SHUTTING_DOWN');
+    if (config.transport !== 'stdio') throw new McpOperationError('Only stdio is supported', 'BAD_REQUEST');
+    const previous = this.connections.get(config.id);
+    if (previous?.closing) throw new McpOperationError('Server is disconnecting; retry when complete', 'BUSY');
+    if (previous?.status === 'connected') return this.getState(config);
+    if (previous?.status === 'connecting') {
+      await previous.operation;
+      return this.getState(config);
     }
-    return conn;
+    const normalized = withAbsolutePaths({ ...config, env: this.explicitEnvironment(config) });
+    const conn: Connection = { status: 'connecting', tools: [], abort: new AbortController() };
+    this.connections.set(config.id, conn);
+    conn.operation = this.open(normalized, conn);
+    await conn.operation;
+    return this.getState(config);
   }
-
-  private updateTools(serverId: string, tools: McpToolSummary[]): void {
-    const conn = this.connections.get(serverId);
-    if (conn) conn.tools = tools;
-  }
-
-  private buildEnv(extra: Record<string, string> | undefined): Record<string, string> {
-    // Mezcla el entorno del proceso (filtrado por el SDK) con las
-    // variables explícitas de la config. Las variables explícitas
-    // tienen prioridad.
-    const base = process.env as Record<string, string>;
-    if (!extra) return base;
-    return { ...base, ...extra };
-  }
-
-  private coerceArgs(value: unknown): Record<string, unknown> {
-    if (value === undefined || value === null) return {};
-    if (typeof value === 'object' && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
+  private async open(config: McpServerConfig, conn: Connection): Promise<void> {
+    try {
+      conn.transport = this.options.createTransport?.(config) ?? new StdioClientTransport({ command: config.command, args: config.args, env: config.env, cwd: config.cwd });
+      conn.client = this.options.createClient?.() ?? new Client({ name: 'mcp-schema-runner', version: '0.1.0' }, { capabilities: {} });
+      conn.client.onclose = () => {
+        if (this.connections.get(config.id) !== conn) return;
+        conn.status = conn.intentionalClose ? 'disconnected' : 'error';
+        conn.error = conn.intentionalClose ? undefined : 'MCP process closed unexpectedly';
+        conn.tools = [];
+        conn.pid = undefined;
+        conn.abort.abort();
+      };
+      conn.client.onerror = () => {
+        if (this.connections.get(config.id) !== conn || conn.abort.signal.aborted) return;
+        conn.error = 'MCP transport reported an error';
+        conn.status = 'error';
+        conn.abort.abort();
+        void this.close(conn).then(() => {
+          conn.closing = undefined;
+          if (this.connections.get(config.id) === conn && !conn.intentionalClose) {
+            conn.status = 'error';
+            conn.error = 'MCP transport reported an error';
+          }
+        });
+      };
+      await conn.client.connect(conn.transport, { timeout: this.timeoutMs, signal: conn.abort.signal });
+      if (conn.abort.signal.aborted) throw new McpOperationError('Connection cancelled', 'CANCELLED');
+      conn.tools = await this.fetchTools(conn);
+      if (conn.abort.signal.aborted) throw new McpOperationError('Connection cancelled', 'CANCELLED');
+      conn.pid = conn.transport.pid ?? undefined;
+      conn.status = 'connected';
+      conn.error = undefined;
+    } catch (error) {
+      const cancelled = !!conn.intentionalClose;
+      conn.abort.abort();
+      await this.close(conn);
+      conn.closing = undefined;
+      conn.status = cancelled ? 'disconnected' : 'error';
+      conn.tools = [];
+      conn.pid = undefined;
+      conn.error = cancelled ? undefined : 'Failed to initialize MCP server; check its command and stderr';
+      throw new McpOperationError(cancelled ? 'Connection cancelled' : conn.error!, cancelled ? 'CANCELLED' : 'MCP_CONNECT_FAILED');
     }
-    // Si llega algo inesperado, lo envolvemos. El SDK espera un objeto.
-    return { value };
   }
-
-  private describeError(err: unknown, fallback: string): string {
-    if (err instanceof Error) {
-      const code =
-        err && typeof err === 'object' && 'code' in err
-          ? ` [${String((err as { code: unknown }).code)}]`
-          : '';
-      return `${err.message}${code}`;
-    }
-    return `${fallback}: ${String(err)}`;
+  private close(conn: Connection): Promise<void> {
+    conn.closing ??= (async () => {
+      try { await conn.client?.close(); } catch { /* Always close transport too. */ }
+      try { await conn.transport?.close(); } catch { /* Idempotent after process exit. */ }
+    })();
+    return conn.closing;
   }
-
-  private extractErrorMessage(content: unknown): string {
-    if (!Array.isArray(content) || content.length === 0) return 'tool reported error';
-    const first = content[0] as { type?: string; text?: string };
-    if (first && typeof first === 'object' && 'text' in first && typeof first.text === 'string') {
-      return first.text;
+  async disconnect(id: string): Promise<void> {
+    const conn = this.connections.get(id);
+    if (!conn) return;
+    conn.intentionalClose = true;
+    conn.abort.abort();
+    await this.close(conn);
+    await conn.operation?.catch(() => undefined);
+    if (this.connections.get(id) === conn) this.connections.delete(id);
+  }
+  async disconnectAll(): Promise<void> {
+    this.stopping = true;
+    await Promise.allSettled([...this.connections.keys()].map((id) => this.disconnect(id)));
+  }
+  private requireConnection(id: string): Connection & { client: ManagedClient } {
+    const conn = this.connections.get(id);
+    if (!conn?.client || conn.status !== 'connected' || conn.abort.signal.aborted || conn.closing) throw new McpOperationError('Server is not connected', 'NOT_CONNECTED');
+    return conn as Connection & { client: ManagedClient };
+  }
+  private async fetchTools(conn: Connection): Promise<McpToolSummary[]> {
+    if (!conn.client) throw new McpOperationError('Server is not connected', 'NOT_CONNECTED');
+    const tools: McpToolSummary[] = [];
+    const seen = new Set<string>();
+    let cursor: string | undefined;
+    do {
+      const result = await conn.client.listTools(cursor ? { cursor } : undefined, { timeout: this.timeoutMs, signal: conn.abort.signal });
+      tools.push(...result.tools.map((tool) => ({ name: tool.name, description: tool.description, inputSchema: tool.inputSchema })));
+      cursor = result.nextCursor;
+      if (cursor && seen.has(cursor)) throw new McpOperationError('Repeated tools/list cursor', 'MCP_LIST_FAILED');
+      if (cursor) seen.add(cursor);
+      if (seen.size > 1000) throw new McpOperationError('Too many tool inventory pages', 'MCP_LIST_FAILED');
+    } while (cursor);
+    return tools;
+  }
+  async listTools(id: string): Promise<McpToolSummary[]> {
+    const conn = this.requireConnection(id);
+    const tools = await this.fetchTools(conn);
+    if (!conn.abort.signal.aborted && this.connections.get(id) === conn) conn.tools = tools;
+    return tools;
+  }
+  async callTool(config: McpServerConfig, toolName: string, args: unknown): Promise<ToolExecutionTrace> {
+    if (!isRecord(args)) throw new McpOperationError('Tool arguments must be a JSON object', 'BAD_REQUEST');
+    const conn = this.requireConnection(config.id);
+    const request = structuredClone(args);
+    const timestamp = new Date().toISOString();
+    const start = performance.now();
+    const base = { serverId: config.id, toolName, request, timestamp };
+    try {
+      const result = await conn.client.callTool({ name: toolName, arguments: request }, undefined, { timeout: this.timeoutMs, signal: conn.abort.signal });
+      const durationMs = Math.round(performance.now() - start);
+      if (result.isError) return { ...base, durationMs, status: 'error', error: { message: this.toolError(result.content), raw: result } };
+      return { ...base, durationMs, status: 'success', response: result };
+    } catch (error) {
+      return { ...base, durationMs: Math.round(performance.now() - start), status: 'error', error: {
+        message: conn.abort.signal.aborted ? 'Tool call cancelled or connection closed' : error instanceof Error ? error.message : 'Tool execution failed',
+        name: error instanceof Error ? error.name : undefined,
+        code: error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
+      } };
     }
-    return 'tool reported error';
+  }
+  private toolError(content: unknown): string {
+    if (Array.isArray(content)) {
+      const text = content.find((item: unknown) => isRecord(item) && typeof item.text === 'string') as { text: string } | undefined;
+      if (text) return text.text;
+    }
+    return 'Tool reported an error';
   }
 }
