@@ -7,6 +7,9 @@ import {
 } from './format';
 
 describe('formatJson', () => {
+  it('returns fallback when JSON.stringify yields undefined', () => {
+    expect(formatJson(undefined, 'no body')).toBe('no body');
+  });
   it('pretty-prints objects', () => {
     expect(formatJson({ a: 1 })).toBe('{\n  "a": 1\n}');
   });

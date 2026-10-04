@@ -123,6 +123,12 @@
 
 /* ---- Add server form ---- */
 
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
 .advanced {
   display: flex;
   flex-direction: column;

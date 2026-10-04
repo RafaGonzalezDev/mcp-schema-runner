@@ -29,7 +29,7 @@ export function findTool(
  */
 export function formatJson(value: unknown, fallback = ''): string {
   try {
-    return JSON.stringify(value, null, 2);
+    return JSON.stringify(value, null, 2) ?? fallback;
   } catch {
     return fallback;
   }

@@ -8,7 +8,7 @@ import { useServerHealth, useServers } from './lib/hooks';
 export function App() {
   const [route, navigate] = useRoute();
   const [selectedServerId, setSelectedServerId] = useState<string | null>(null);
-  const { data: online = false } = useServerHealth();
+  const { online } = useServerHealth();
   const { data: servers = [] } = useServers();
 
   // Auto-selecciona el primer servidor la primera vez que hay datos

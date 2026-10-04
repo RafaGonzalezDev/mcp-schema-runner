@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../components/primitives/Button';
 import { ErrorBanner } from '../components/primitives/ErrorBanner';
 import { Field } from '../components/primitives/Field';
 import { useAddServer, useServers } from '../lib/hooks';
-import type { McpServerConfig } from '../../../shared/types';
+import type { AddServerConfig } from '../../../shared/types';
+import { parseEnvironment } from '../lib/environment';
+import { MigrationNotice } from '../components/shell/MigrationNotice';
 import type { Route } from '../lib/router';
+import { builtinFixtures } from '../../../shared/fixtures';
 import styles from './HomePage.module.css';
 
 const STEPS: { title: string; body: React.ReactNode }[] = [
@@ -13,7 +16,8 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
     body: (
       <>
         A server is described by a JSON object with <code>command</code>,{' '}
-        <code>args</code> and optionally <code>env</code> and <code>cwd</code>.
+        <code>args</code> and optionally session <code>env</code>, saved{' '}
+        <code>envRefs</code> and <code>cwd</code>.
         The runner spawns it as a local subprocess and talks JSON-RPC over stdio.
       </>
     ),
@@ -32,7 +36,7 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
     title: 'Inspect an inputSchema',
     body: (
       <>
-        Click any tool in the right-hand panel to see its <code>inputSchema</code>.
+        Click any tool in the tool list to see its <code>inputSchema</code>.
         The runner pre-fills example arguments derived from the schema so you
         can iterate fast.
       </>
@@ -42,10 +46,10 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
     title: 'Run and read the trace',
     body: (
       <>
-        Edit the JSON arguments and press <code>run tool</code>. The execution
-        trace shows the <code>request</code> sent, the <code>response</code> or{' '}
-        <code>error</code> returned, the duration and the timestamp — exactly
-        what an agent would see when invoking the tool.
+        Edit the JSON arguments and press <code>call tool</code>. The execution
+        trace shows the SDK <code>request</code> arguments, the <code>response</code> or{' '}
+        <code>error</code> returned, the duration and the timestamp. It is not a
+        JSON-RPC wire capture.
       </>
     ),
   },
@@ -56,13 +60,15 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
  * `filesystem` fixture, so the user only has to change the id
  * (or the name) to add their own MCP server.
  */
+const starter = builtinFixtures.find((fixture) => fixture.id === 'filesystem');
 const TEMPLATE_FORM = {
-  name: 'filesystem',
-  id: 'filesystem',
-  command: 'npx',
-  argsText: '-y\n@modelcontextprotocol/server-filesystem\n./fixtures-workspace',
+  name: starter?.name ?? 'filesystem',
+  id: starter?.id ?? 'filesystem',
+  command: starter?.command ?? 'npx',
+  argsText: starter?.args.join('\n') ?? '',
   cwd: '',
   envText: '',
+  envRefsText: '',
 } as const;
 
 type FormState = {
@@ -72,6 +78,7 @@ type FormState = {
   argsText: string;
   cwd: string;
   envText: string;
+  envRefsText: string;
 };
 
 type Props = {
@@ -82,21 +89,6 @@ type Props = {
 /** Parses a one-argument-per-line textarea into a string[]. Blank lines are dropped. */
 function parseArgsText(text: string): string[] {
   return text.split('\n').map((l) => l.trim()).filter(Boolean);
-}
-
-/** Parses a `KEY=value` per line textarea into a Record. Invalid lines are dropped. */
-function parseEnvText(text: string): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line) continue;
-    const eq = line.indexOf('=');
-    if (eq <= 0) continue;
-    const key = line.slice(0, eq).trim();
-    if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) continue;
-    out[key] = line.slice(eq + 1);
-  }
-  return out;
 }
 
 /** Lowercase, ascii-only slug used to auto-derive the id from the name. */
@@ -110,7 +102,7 @@ function slugify(value: string): string {
 }
 
 export function HomePage({ onNavigate, onSelectServer }: Props) {
-  const { data: servers = [] } = useServers();
+  const { data: servers = [], migrationPending, error: serversError, isLoading: serversLoading } = useServers();
   const addServer = useAddServer();
 
   const [form, setForm] = useState<FormState>({ ...TEMPLATE_FORM });
@@ -118,7 +110,9 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
   // false, name changes auto-update the id via `slugify`.
   const [idTouched, setIdTouched] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [localError, setLocalError] = useState<string | null>(null);
+  const [submitted, setSubmitted] = useState(0);
+  const [touched, setTouched] = useState<Partial<Record<keyof FormState, boolean>>>({});
+  const formRef = useRef<HTMLFormElement>(null);
 
   function setField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => {
@@ -130,76 +124,52 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
     });
   }
 
-  // Field-level validation. The submit button is gated on this
-  // object having no keys; individual errors are surfaced inline on
-  // the corresponding `Field`.
+  const environment = useMemo(() => parseEnvironment(form.envText), [form.envText]);
+  const references = useMemo(() => parseEnvironment(form.envRefsText, true), [form.envRefsText]);
   const errors = useMemo(() => {
-    const e: {
-      name?: string;
-      id?: string;
-      command?: string;
-      args?: string;
-      env?: string;
-    } = {};
-    if (form.name.trim().length === 0) e.name = 'name is required';
-    const trimmedId = form.id.trim();
-    // El id del form puede coincidir con el servidor recién añadido
-    // (caso de éxito): en ese caso la colisión es "esperada" y
-    // omitimos el error para no contaminar el estado post-éxito,
-    // que está a punto de desmontarse al navegar al inspector.
-    const justAddedId = addServer.data?.config.id;
-    if (trimmedId.length === 0) {
-      e.id = 'id is required';
-    } else if (
-      trimmedId !== justAddedId &&
-      servers.some((s) => s.config.id === trimmedId)
-    ) {
-      e.id = `a server with id "${trimmedId}" already exists in your runner`;
+    const e: Partial<Record<keyof FormState, string>> = {};
+    if (!form.name.trim()) e.name = 'name is required';
+    if (!form.id.trim()) e.id = 'id is required';
+    else if (form.id.trim() !== addServer.data?.config.id && servers.some((s) => s.config.id === form.id.trim())) {
+      e.id = 'this id is already configured; choose a unique id';
     }
-    if (form.command.trim().length === 0) e.command = 'command is required';
-    if (parseArgsText(form.argsText).length === 0) {
-      e.args = 'at least one argument is required';
-    }
-    const envLines = form.envText.split('\n').map((l) => l.trim()).filter(Boolean);
-    for (const line of envLines) {
-      if (!/^[A-Z_][A-Z0-9_]*=.*$/.test(line)) {
-        e.env = `invalid line: "${line}" — expected KEY=value (uppercase key)`;
-        break;
-      }
+    if (!form.command.trim()) e.command = 'command is required';
+    if (!environment.ok) e.envText = environment.error;
+    if (!references.ok) e.envRefsText = references.error;
+    if (environment.ok && references.ok && Object.keys(environment.values).some((key) => Object.hasOwn(references.values, key))) {
+      e.envRefsText = 'Use either a session value or a reference for each variable, not both.';
     }
     return e;
-  }, [form, servers, addServer.data]);
+  }, [form, servers, addServer.data, environment, references]);
 
-  const hasErrors = Object.keys(errors).length > 0;
-  const errorMessage = localError ?? addServer.error?.message ?? null;
-  const canSubmit = !hasErrors && !addServer.isPending;
+  useEffect(() => {
+    if (submitted) formRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
+  }, [submitted]);
 
-  const handleAdd = async () => {
-    if (hasErrors) return;
-    setLocalError(null);
-    const config: McpServerConfig = {
-      id: form.id.trim(),
-      name: form.name.trim(),
-      transport: 'stdio',
-      command: form.command.trim(),
+  const visibleError = (key: keyof FormState) => submitted || touched[key] ? errors[key] : undefined;
+  const markTouched = (key: keyof FormState) => setTouched((previous) => ({ ...previous, [key]: true }));
+  const errorMessage = addServer.error?.message ?? serversError?.message ?? null;
+  const canSubmit = !addServer.isPending && !migrationPending && !serversLoading && !serversError;
+
+  const handleAdd = () => {
+    setSubmitted((count) => count + 1);
+    if (errors.envText || errors.envRefsText) setShowAdvanced(true);
+    if (Object.keys(errors).length || !canSubmit || !environment.ok || !references.ok) return;
+    const config: AddServerConfig = {
+      id: form.id.trim(), name: form.name.trim(), transport: 'stdio', command: form.command.trim(),
       args: parseArgsText(form.argsText),
       ...(form.cwd.trim() ? { cwd: form.cwd.trim() } : {}),
-      ...(form.envText.trim() ? { env: parseEnvText(form.envText) } : {}),
+      ...(form.envText.trim() ? { env: environment.values } : {}),
+      ...(form.envRefsText.trim() ? { envRefs: references.values } : {}),
     };
-    try {
-      const server = await addServer.mutateAsync(config);
+    addServer.mutate(config, { onSuccess: (server) => {
+      setForm((previous) => ({ ...previous, envText: '' }));
       onSelectServer(server.config.id);
       onNavigate('inspector');
-    } catch (err) {
-      // El mensaje se propaga al ErrorBanner vía `addServer.error`.
-      console.error('addServer failed', err);
-    }
+    } });
   };
 
-  const handleDismissError = () => {
-    setLocalError(null);
-    addServer.reset();
-  };
+  const handleDismissError = () => addServer.reset();
 
   const success = addServer.data;
 
@@ -210,7 +180,7 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
         <h1 className={styles.title}>Debug stdio MCP servers locally.</h1>
         <p className={styles.lead}>
           Inspect tool schemas, execute manual tool calls and inspect raw
-          request / response / error traces — everything you need to validate a
+          argument / result / error traces — everything you need to validate a
           Model Context Protocol server before plugging it into an agent.
         </p>
       </header>
@@ -240,11 +210,13 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
         </div>
         <p className={styles.stepText}>
           Fill in the fields below to add a custom MCP server. The runner
-          builds the configuration for you and persists it to{' '}
-          <code>server/.data/servers.json</code>, where it becomes
-          available in the inspector immediately.
+          saves the command, variable names and backend references locally.
+          Literal environment values are held in backend memory for this session only.
         </p>
 
+        <MigrationNotice pending={migrationPending} />
+        <p className={styles.stepText}>Name, id and command are required. Arguments may be empty.</p>
+        <form className={styles.addForm} ref={formRef} noValidate onSubmit={(event) => { event.preventDefault(); handleAdd(); }}>
         <ErrorBanner
           error={errorMessage}
           onDismiss={handleDismissError}
@@ -258,7 +230,9 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           onChange={(e) => setField('name', e.target.value)}
           placeholder="filesystem"
           hint={!errors.name ? 'display name shown in the UI' : undefined}
-          error={errors.name}
+          error={visibleError('name')}
+          onBlur={() => markTouched('name')}
+          required aria-required="true"
         />
         <Field
           id="add-server-id"
@@ -271,7 +245,9 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           }}
           placeholder="filesystem"
           hint={!errors.id ? 'unique identifier used by the API. auto-derived from name until edited' : undefined}
-          error={errors.id}
+          error={visibleError('id')}
+          onBlur={() => markTouched('id')}
+          required aria-required="true"
         />
         <Field
           id="add-server-command"
@@ -280,7 +256,9 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           onChange={(e) => setField('command', e.target.value)}
           placeholder="npx"
           hint={!errors.command ? 'executable to spawn (npx, node, python, uvx...)' : undefined}
-          error={errors.command}
+          error={visibleError('command')}
+          onBlur={() => markTouched('command')}
+          required aria-required="true"
         />
         <Field
           as="textarea"
@@ -289,8 +267,7 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
           value={form.argsText}
           onChange={(e) => setField('argsText', e.target.value)}
           placeholder={'-y\n@modelcontextprotocol/server-filesystem'}
-          hint={!errors.args ? 'one argument per line; blank lines are ignored' : undefined}
-          error={errors.args}
+          hint="one argument per line; empty arguments are allowed. Relative paths use the repository root unless a working directory is set."
         />
 
         <div className={styles.advanced}>
@@ -315,7 +292,7 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
                 value={form.cwd}
                 onChange={(e) => setField('cwd', e.target.value)}
                 placeholder="./fixtures-workspace"
-                hint="optional. where the command runs from"
+                hint="optional. where the command runs from; defaults to the repository root"
               />
               <Field
                 as="textarea"
@@ -324,18 +301,33 @@ export function HomePage({ onNavigate, onSelectServer }: Props) {
                 value={form.envText}
                 onChange={(e) => setField('envText', e.target.value)}
                 placeholder={'LICENSE=\nEMAIL='}
-                hint="optional. one KEY=value per line; value may be empty"
-                error={errors.env}
+                hint="session-only. One KEY=value per line; values are never saved or shown in server config."
+                error={visibleError('envText')}
+                onBlur={() => markTouched('envText')}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <Field
+                as="textarea"
+                id="add-server-env-refs"
+                label="environment references"
+                value={form.envRefsText}
+                onChange={(event) => setField('envRefsText', event.target.value)}
+                onBlur={() => markTouched('envRefsText')}
+                placeholder="API_KEY=MY_BACKEND_API_KEY"
+                hint="saved names only. KEY=BACKEND_VARIABLE reads the value from the backend environment."
+                error={visibleError('envRefsText')}
               />
             </div>
           )}
         </div>
 
         <div className={styles.addActions}>
-          <Button variant="primary" onClick={handleAdd} disabled={!canSubmit}>
+          <Button type="submit" variant="primary" disabled={!canSubmit}>
             {addServer.isPending ? 'adding...' : 'add server'}
           </Button>
         </div>
+        </form>
 
         {success && (
           <div className={styles.success} role="status">

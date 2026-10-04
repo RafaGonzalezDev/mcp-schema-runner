@@ -1,59 +1,34 @@
-import { useEffect, useId, useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '../primitives/Button';
 import { exampleFromSchema, formatJson, parseJson } from '../../lib/format';
 import styles from './JsonEditor.module.css';
 
 type Props = {
-  /** Texto inicial. */
-  initial?: string;
-  /** Schema actual para regenerar el ejemplo. */
+  value: string;
   schema?: unknown;
-  /** Notifica al padre cuando el texto cambia. */
   onChange: (text: string) => void;
-  /** Deshabilita la edición. */
   disabled?: boolean;
-  /** ID opcional para accesibilidad. */
   id?: string;
+  label?: string;
 };
 
-export function JsonEditor({ initial, schema, onChange, disabled, id }: Props) {
+/** Controlled editor: schema changes never replace the user's draft. */
+export function JsonEditor({ value, schema, onChange, disabled, id, label = 'Tool arguments (JSON)' }: Props) {
   const reactId = useId();
   const fieldId = id ?? reactId;
-  const [text, setText] = useState(initial ?? '');
   const [touched, setTouched] = useState(false);
-
-  useEffect(() => {
-    setText(initial ?? '');
-  }, [initial]);
-
-  const parsed = parseJson(text);
-  const showError = touched && !parsed.ok;
-
-  function update(next: string) {
-    setText(next);
-    onChange(next);
-  }
-
-  function handleFormat() {
-    if (!parsed.ok) return;
-    update(formatJson(parsed.value));
-  }
-
-  function handleFillExample() {
-    update(exampleFromSchema(schema));
-  }
-
-  function handleClear() {
-    update('');
-  }
-
+  const parsed = parseJson(value);
+  const objectValid = parsed.ok && typeof parsed.value === 'object' && parsed.value !== null && !Array.isArray(parsed.value);
+  const showError = touched && !objectValid;
+  const error = parsed.ok ? 'Arguments must be a JSON object.' : parsed.error;
   return (
     <div>
+      <label htmlFor={fieldId}>{label}</label>
       <textarea
         id={fieldId}
         className={[styles.editor, showError ? styles.error : ''].filter(Boolean).join(' ')}
-        value={text}
-        onChange={(e) => update(e.target.value)}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         onBlur={() => setTouched(true)}
         spellCheck={false}
         disabled={disabled}
@@ -63,21 +38,11 @@ export function JsonEditor({ initial, schema, onChange, disabled, id }: Props) {
       />
       <div className={styles.bar}>
         <div className={styles.actions}>
-          <Button variant="ghost" compact onClick={handleFormat} disabled={disabled || !parsed.ok}>
-            format
-          </Button>
-          <Button variant="ghost" compact onClick={handleFillExample} disabled={disabled}>
-            from schema
-          </Button>
-          <Button variant="ghost" compact onClick={handleClear} disabled={disabled || text.length === 0}>
-            clear
-          </Button>
+          <Button variant="ghost" compact onClick={() => { if (parsed.ok) onChange(formatJson(parsed.value)); }} disabled={disabled || !parsed.ok}>format</Button>
+          <Button variant="ghost" compact onClick={() => onChange(exampleFromSchema(schema))} disabled={disabled || !schema}>from schema</Button>
+          <Button variant="ghost" compact onClick={() => onChange('')} disabled={disabled || value.length === 0}>clear</Button>
         </div>
-        {showError && (
-          <div id={`${fieldId}-err`} className={styles.errorMsg} role="alert">
-            {parsed.ok ? '' : parsed.error}
-          </div>
-        )}
+        {showError && <div id={`${fieldId}-err`} className={styles.errorMsg} role="alert">{error}</div>}
       </div>
     </div>
   );

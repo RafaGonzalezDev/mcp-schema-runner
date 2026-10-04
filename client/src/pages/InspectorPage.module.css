@@ -129,6 +129,12 @@
   line-height: var(--line-height-normal);
 }
 
+.environmentForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
 /* ---- Server config block ---- */
 .configBox {
   display: flex;
