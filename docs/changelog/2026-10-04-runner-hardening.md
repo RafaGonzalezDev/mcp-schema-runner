@@ -1,3 +1,11 @@
+## 2026-10-04 — Remove the continuous integration workflow
+
+**What**: Delete the single GitHub Actions workflow, so no automated run installs, typechecks, tests, builds or smokes the project. The local scripts it invoked remain, and the documentation now states that nothing runs them automatically.
+
+**Where**: The single GitHub Actions workflow (deleted), [README](<../../README.md>) and [validation overview](<../overview/validation.md>).
+
+**Why**: The checks were only ever executed locally; the workflow added configuration to maintain without producing a verified run.
+
 ## 2026-10-04 — Clarify the Home and Inspector workflows
 
 **What**: Reorganize the interface around choosing a server, selecting a tool, understanding its schema, editing arguments and reading the result. Keep server configuration available through native disclosure rather than displacing the execution workspace, highlight selection, and preserve tools-first order on small screens.
@@ -16,9 +24,9 @@
 
 ## 2026-10-04 — Make connections, UI and launch reproducible
 
-**What**: Track pending MCP connections, cancellation, failures and complete tool pagination; keep exact SDK argument/result traces. Repair compiled paths and cwd handling, serve production UI with the API, and supervise development process trees. Improve keyboard navigation, labels, contrast, draft/trace reactivity and environment recovery. Add deterministic integration tests, smoke and CI; update vulnerable dependency resolutions and the test runner for confirmed security advisories.
+**What**: Track pending MCP connections, cancellation, failures and complete tool pagination; keep exact SDK argument/result traces. Repair compiled paths and cwd handling, serve production UI with the API, and supervise development process trees. Improve keyboard navigation, labels, contrast, draft/trace reactivity and environment recovery. Add deterministic integration tests, smoke and a CI workflow; update vulnerable dependency resolutions and the test runner for confirmed security advisories.
 
-**Where**: [MCP manager](<../../server/src/mcp/manager.ts>), [path resolver](<../../server/src/config/projectPaths.ts>), [launch scripts](<../../scripts/dev.mjs>), [Inspector](<../../client/src/pages/InspectorPage.tsx>), [Home](<../../client/src/pages/HomePage.tsx>), [smoke](<../../scripts/smoke.mjs>) and [CI](<../../.github/workflows/ci.yml>).
+**Where**: [MCP manager](<../../server/src/mcp/manager.ts>), [path resolver](<../../server/src/config/projectPaths.ts>), [launch scripts](<../../scripts/dev.mjs>), [Inspector](<../../client/src/pages/InspectorPage.tsx>), [Home](<../../client/src/pages/HomePage.tsx>), [smoke](<../../scripts/smoke.mjs>) and the CI workflow added then and removed on the same date.
 
 **Why**: Fix connection races, startup failures, inaccurate state and inaccessible controls without changing the product architecture. Validation outcomes and limits belong in [validation overview](<../overview/validation.md>).
 

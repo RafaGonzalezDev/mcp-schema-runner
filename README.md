@@ -101,7 +101,7 @@ Built-in ids (`demo`, `filesystem`, `context7`, `playwright`) are reserved: save
 | context7 | `@upstash/context7-mcp@4.1.1` | Network; service credentials may be required |
 | playwright | `@playwright/mcp@0.0.83` | Network and an installed Chrome browser |
 
-The three `npx` demos download pinned packages on first use and are not CI fixtures. Package downloads execute third-party code. CI and the smoke runs use a small deterministic local MCP server instead, with no external services or credentials.
+The three `npx` demos download pinned packages on first use and are not used by the smoke runs. Package downloads execute third-party code. The smoke runs use a small deterministic local MCP server instead, with no external services or credentials.
 
 ## API
 
@@ -135,7 +135,7 @@ npm run smoke:dev
 
 Tests cover storage/IO failures, migration, canonical validation, connection races and cancellation, HTTP security, real local stdio calls, client hooks/forms and keyboard interactions. Smoke verifies the compiled application, assets, authentication, paginated inventory, success/error traces and process cleanup using isolated temporary storage.
 
-[CI](<.github/workflows/ci.yml>) defines Ubuntu/Windows × Node 22/24. See [validation](<docs/overview/validation.md>) for the distinction between local checks and a completed CI run.
+These commands are the complete check suite: there is no continuous integration workflow, so nothing runs them automatically. See [validation](<docs/overview/validation.md>) for what each command covers and what remains unverified.
 
 - [Architecture](<docs/overview/architecture.md>)
 - [Storage](<docs/overview/storage.md>)
